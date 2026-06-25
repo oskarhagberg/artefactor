@@ -2,11 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S0 scaffolded; building feature slices
+## Status: S1 done; building feature slices
 
-**S0 (scaffold) is complete** — the monolith builds, runs, migrates, and tests green (see
-`docs/specs/fdd/s0-scaffold.md` and its Implementation notes). Next up is **S1** (Identity
-via BetterAuth), then the domain slices per the FDD DAG. Development is still **spec-driven**:
+**S0 (scaffold) and S1 (Identity via BetterAuth) are complete** — the monolith builds, runs,
+migrates, and tests green. Auth is wired (`src/server/auth.ts`): email + password via
+BetterAuth's Drizzle adapter, a session middleware + `requireAuth` guard, and a protected
+`GET /api/me` (see `docs/specs/fdd/slice-dag.md` §S1 implementation notes). Next up is **S2**
+(Create artefact), then the domain slices per the FDD DAG. Development is **spec-driven**:
 locate the governing DDD invariant and FDD slice before coding, build test-first, and keep
 spec ↔ tests ↔ code in sync in the same change.
 
@@ -133,6 +135,10 @@ pnpm check                     # svelte-check + tsc --noEmit (server) — type s
 pnpm db:generate               # drizzle-kit: generate a migration from src/infra/db/schema.ts
 pnpm db:migrate                # apply migrations (tsx src/infra/db/migrate.ts)
 pnpm db:studio                 # drizzle studio
+
+# Identity (S1): regenerate BetterAuth's Drizzle tables after changing src/server/auth.ts
+# (e.g. adding the api-key plugin in S8), then re-run db:generate to emit the migration.
+pnpm dlx @better-auth/cli generate --config src/server/auth.ts --output src/infra/db/auth-schema.ts
 ```
 
 **Native deps:** pnpm 11 blocks dependency build scripts. After a fresh `pnpm install`, run
