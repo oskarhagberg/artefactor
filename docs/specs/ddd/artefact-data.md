@@ -1,0 +1,137 @@
+# Bounded Context: Artefact Data (backend store)
+
+A simple per-artefact, per-user JSON store. It lets form / interactive artefacts persist
+data **server-side** instead of (or alongside) browser `localStorage`. The motivating
+example is an artefact that today does `localStorage.setItem(KEY, JSON.stringify({...}))`;
+the backend store is a drop-in replacement that survives across browsers.
+
+**The blob is opaque to the backend.** Each artefact decides the shape of its own payload —
+the `{cards, sections}` object in the reference artefact is just one example. The store
+validates that the body is *valid JSON within the size cap* and nothing more; it never
+interprets or schema-checks the contents.
+
+**The artefact sees exactly one dataset.** From inside the served artefact there is a single
+set of data — the same mental model as plain `localStorage`. The artefact never reads across
+users and never knows whose data it holds. Choosing *which* user's data is loaded is a
+**host concern** handled by Artefactor's own UI *outside* the artefact container (see *Data
+context*), and is opaque to the artefact.
+
+## Aggregate: `DataEntry`
+
+One entry per **(artefact, author)** pair. The whole stored object is a single opaque JSON
+blob, mirroring how artefacts already keep one JSON object under one storage key.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | DataEntryId (uuid) | Identity. |
+| `artefactId` | ArtefactId | The artefact this data belongs to. Immutable. |
+| `authorId` | UserId | The Account that wrote it. Immutable. |
+| `blob` | JSON | Opaque JSON value, shape owned by the artefact. ≤ `MAX_BLOB_BYTES` (= **5 MB**). |
+| `createdAt` | timestamp | First write. |
+| `updatedAt` | timestamp | Last write (upsert bumps it). |
+
+## Invariants
+
+1. **One per pair**: at most one `DataEntry` per `(artefactId, authorId)`. Writes **upsert**.
+2. **Author = writer**: `authorId` is the authenticated user performing the write. A user
+   may write **only their own** entry — never another user's.
+3. **Writes require auth — no anonymous writes**: every write is attributed to an
+   authenticated `authorId`. Unauthenticated viewers of a `public` artefact can *read*
+   entries but can never create or modify one. (Decided: anonymous writes are not allowed.)
+4. **Read follows artefact access**: which entries a viewer may *load* (through the host
+   data-context switcher) is governed by the `Artefact` access matrix (`artefact-hosting.md`):
+   - artefact `private` → only the owner (only their own entry exists anyway);
+   - artefact `authenticated` → any signed-in user may load **any** author's entry;
+   - artefact `public` → anyone (incl. unauthenticated) may load **any** author's entry.
+5. **Write only your own context**: a viewer can write only when the loaded data context is
+   their **own** entry. Loading another author's entry is **read-only** — the served artefact
+   is in read-only mode and write attempts are rejected.
+6. **Inert when archived**: if the artefact is `archived`, the data API returns 404 for both
+   reads and writes (consistent with `artefact-hosting.md` invariant 7).
+7. **Lifecycle-bound**: entries have no existence independent of their artefact.
+8. **Blob bounds**: `blob` is valid JSON and ≤ `MAX_BLOB_BYTES` (5 MB). Contents are opaque
+   — the artefact owns the shape; the backend does not interpret it.
+
+## BFF endpoints (shape, to be finalized)
+
+Consumed by **two different clients** — keep them distinct:
+
+- **Host UI** (Artefactor's Svelte chrome around the iframe) drives the data-context
+  switcher: list which authors have data, and load a chosen author's blob into the viewer.
+- **Served artefact** never calls these directly; its persistence flows through the hijacked
+  `localStorage`, which the BFF seeds and writes on its behalf.
+
+| Method | Path | Purpose | Consumer / access |
+|--------|------|---------|-------------------|
+| `GET` | `/api/artefacts/:slug/data/authors` | List authors who have an entry (id + `updatedAt`) | host UI; per access matrix |
+| `GET` | `/api/artefacts/:slug/data/:authorId` | Load one author's blob (for seeding/switching) | host UI; per access matrix |
+| `GET` | `/api/artefacts/:slug/data/me` | The caller's own entry | host/runtime; authenticated |
+| `PUT` | `/api/artefacts/:slug/data/me` | Upsert the caller's blob | runtime (shim write-through); authenticated |
+| `DELETE` | `/api/artefacts/:slug/data/me` | Remove the caller's entry | authenticated |
+
+The author-listing and per-author endpoints exist **only** to power the host switcher; the
+artefact itself stays opaque and single-dataset.
+
+## Artefact runtime contract
+
+**Design principle: the artefact only knows about `localStorage`.** Artefacts are written to
+persist with the standard `localStorage` API (as the reference artefact does). Artefactor
+**hijacks `localStorage`** on serve so that this persistence transparently flows to the
+backend store — with **no changes to the artefact's code**. The artefact sees one dataset and
+nothing else; there is no cross-user API inside the artefact.
+
+### 1. localStorage hijack (transparent, zero-change)
+
+On serving an artefact, Artefactor injects a bootstrap **before any artefact script runs**
+that replaces `window.localStorage` with a backend-backed shim:
+
+- The shim presents the full synchronous `localStorage` API (`getItem`, `setItem`,
+  `removeItem`, `clear`, `key`, `length`).
+- The artefact's entire localStorage keyspace is modelled as **one JSON object**
+  (`{ [key]: stringValue }`) — and *that object is the `DataEntry.blob`*. This is exactly the
+  "one JSON object under one key" pattern artefacts already use.
+- **Reads are synchronous** because the shim is **seeded server-side**: the BFF looks up the
+  viewer's `DataEntry` while serving and inlines it into the bootstrap, so the in-memory map
+  is populated before the artefact runs. No client round-trip on first read.
+- **Writes are write-through + debounced**: `setItem`/`removeItem`/`clear` update the
+  in-memory map synchronously, then schedule a debounced `PUT …/data/me` of the whole blob.
+  A flush on `pagehide`/`visibilitychange` (via `navigator.sendBeacon`) avoids losing the
+  last edit.
+- **Quota maps to the cap**: a write that would push the blob over `MAX_BLOB_BYTES` (5 MB)
+  throws `QuotaExceededError`, mirroring native `localStorage` (and 5 MB is itself a typical
+  localStorage budget, so artefacts already tolerate it).
+- **Read-only contexts throw on write.** When the seeded data is read-only — an
+  unauthenticated viewer of a `public` artefact, or a viewer who has loaded *another* user's
+  data via the host switcher — writes are no-ops that throw like a full/read-only store.
+  Seeded reads still work. The artefact cannot tell why; it just tolerates the failure.
+
+The shim surface is finalized in slice **S13**. No `window.ARTEFACTOR` helper is exposed to
+the artefact — persistence is `localStorage` only.
+
+### 2. Data context (host-level, outside the artefact)
+
+Which `DataEntry` is seeded into the artefact is the **data context**, chosen by Artefactor's
+host UI, not the artefact:
+
+- Default context = the **viewer's own** entry (read-write).
+- A signed-in viewer with read access (per the access matrix) can use a host **user-picker
+  widget** to load **another** author's entry. That re-seeds the artefact (e.g. iframe
+  reload) with the selected blob in **read-only** mode.
+- The artefact is oblivious to all of this: it always just sees "the one dataset" via
+  `localStorage`. Switching context is opaque to it.
+
+This keeps cross-user viewing entirely in the host application (BFF + Svelte chrome), backed
+by the `…/data/authors` and `…/data/:authorId` endpoints above.
+
+## Decided
+
+- **`MAX_BLOB_BYTES` = 5 MB.**
+- **Single mutable blob per (artefact, author), upsert** — no append log of submissions.
+- **No anonymous writes.** A `public` artefact's data is read-for-all, write-for-signed-in.
+  Consequence: public artefacts cannot collect submissions from logged-out visitors.
+- **localStorage is hijacked** so artefacts persist to the backend with zero code changes;
+  the shim is **seeded server-side** so reads stay synchronous. **No `ARTEFACTOR` helper is
+  exposed to the artefact** — it sees one opaque dataset, `localStorage` only.
+- **Cross-user viewing is a host feature**, not an artefact capability: a host user-picker
+  loads another author's data **read-only** by re-seeding the artefact. The artefact never
+  knows whose data it holds.

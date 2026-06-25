@@ -1,0 +1,120 @@
+# FDD — Feature Slice DAG (v0.2)
+
+Each slice is a **vertical cut** through the stack: BFF endpoint (Hono) + domain logic +
+Drizzle persistence + Svelte UI where relevant. Built **test-first** (TDD) against the
+invariants it touches. A slice is only started once its dependencies are done.
+
+## Dependency DAG
+
+```
+S0 Scaffold (Hono + Vite/Svelte + Tailwind + shadcn-svelte + Drizzle/SQLite + Docker)
+        │
+        ▼
+S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
+        │
+        ├────────────► S2 Create artefact (active/private, manual upload)
+        │                     ├──► S3 Edit artefact (title / kind / payload)
+        │                     ├──► S4 Owner views own artefact
+        │                     ├──► S5 Share / unshare (private↔authenticated↔public; mint+retain slug)
+        │                     │            ├──► S6 Serve artefact by slug (access matrix)
+        │                     │            └──► S14 Browse gallery (shared+public, grouped by kind)
+        │                     ├──► S7 Archive / restore
+        │                     ├──► S10 Owner dashboard (list own artefacts)
+        │                     └──► S11 Store: read/write own data blob
+        │                                  ├──► S12 Host UI: data-context switcher (load another author, read-only)
+        │                                  └──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
+        │
+        └────────────► S8 Issue / revoke API key (BetterAuth API-key plugin)
+                              └──► S9 API push ingestion (needs S2 + S8)
+```
+
+## Slices & acceptance criteria
+
+Acceptance criteria are the seed for each slice's unit tests. Invariant numbers reference
+`ddd/artefact-hosting.md` (AH), `ddd/identity-access.md` (IA), and `ddd/artefact-data.md` (AD).
+
+### S0 — Scaffold *(prerequisite, not a domain slice)*
+Monolith builds and runs: Hono serves the Svelte app; Drizzle connected to SQLite with
+migrations; Tailwind + shadcn-svelte wired; pure `domain/` layer + Vitest harness; Docker
+image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.md).**
+
+### S1 — Identity (BetterAuth)
+- Users sign up / sign in with **email + password** (dev phase); **Google OAuth** added
+  later as an additive method on the same user.
+- An authenticated session exposes a stable `ownerId` to the BFF.
+- Protected endpoints reject unauthenticated requests. *(IA 1)*
+
+### S2 — Create artefact
+- Authenticated owner creates an artefact from title + kind + HTML upload.
+- New artefact is `active` / `private`, `publicSlug = null`. *(AH create)*
+- Rejects empty payload, oversize payload, empty title. *(AH 2, 3)*
+- `ownerId` = current session user. *(AH 1)*
+
+### S3 — Edit artefact
+- Owner updates title / kind / payload; `updatedAt` bumps.
+- Same payload/title invariants as create. *(AH 2, 3)*
+- Rejected if artefact is archived. *(AH 7)*
+- Non-owner cannot edit. *(AH 8)*
+
+### S4 — Owner views own artefact
+- Owner can view their own `active` artefact at any visibility.
+- Archived gets 404 (reached only via dashboard restore). *(AH 7)*
+
+### S5 — Share / unshare
+- Share raises visibility to `authenticated` or `public`; mints a unique slug on first
+  share, reuses the retained slug thereafter; tier can be changed between the two. *(AH 4, 5, 6)*
+- Unshare sets `private`, retains slug. *(AH 5)*
+- Owner-only; blocked while archived. *(AH 7, 9)*
+
+### S6 — Serve artefact by slug (access matrix)
+- Serving an `active` artefact by slug enforces the access matrix: `public` → anyone;
+  `authenticated` → any signed-in user; `private` → owner only. *(AH 8)*
+- Wrong-tier viewer, archived, and unknown slug → 404. *(AH 7, 8)*
+
+### S7 — Archive / restore
+- Archive hides + un-serves the artefact and its data, sets `archivedAt`. *(AH 7)*
+- Restore returns it to `active` with prior visibility, clears `archivedAt`. Owner-only. *(AH 9)*
+
+### S8 — API key issue / revoke
+- Owner issues a key (plaintext shown once) and can revoke it. *(IA 2, 3)*
+
+### S9 — API push ingestion
+- A valid API key creates an artefact attributed to the key's Account, satisfying all
+  create invariants. *(AH 10, IA 2)*
+- A revoked/invalid key is rejected. *(IA 3)*
+
+### S10 — Owner dashboard
+- Owner lists their own `active` artefacts (archived hidden by default); shows visibility +
+  shareable link when shared, grouped/filterable by kind.
+
+### S11 — Store: read/write own data blob
+- Authenticated viewer upserts their own JSON blob for an artefact (one per author). *(AD 1, 2, 3)*
+- `GET …/data/me` returns the caller's blob; rejects oversize/invalid JSON. *(AD 8)*
+- Unauthenticated write rejected; archived artefact → 404. *(AD 3, 6)*
+
+### S12 — Host UI: data-context switcher
+- A signed-in viewer with read access can list authors who have data and load another
+  author's blob into the artefact, **read-only** (re-seed/iframe reload). *(AD 4, 5)*
+- Tiers enforced via the `…/data/authors` + `…/data/:authorId` endpoints: private → owner
+  only; authenticated → signed-in; public → anyone. *(AD 4)*
+- This lives entirely in the host (BFF + Svelte chrome); the artefact stays opaque.
+
+### S13 — Artefact runtime bootstrap (localStorage hijack)
+- Served artefacts get an injected shim that **replaces `window.localStorage`** with a
+  backend-backed store, **seeded server-side** with the current data context so reads are
+  synchronous; writes are write-through + debounced with a `pagehide` beacon flush. *(AD runtime contract §1)*
+- The artefact needs **zero code changes** and sees **one opaque dataset** — `localStorage`
+  only, no `ARTEFACTOR` helper.
+- Over-cap write throws `QuotaExceededError`; a read-only context (logged-out public viewer,
+  or another author's data loaded via S12) throws on write while seeded reads still work. *(AD 3, 5, 8)*
+
+### S14 — Browse gallery
+- A signed-in user browses artefacts shared to them (`authenticated` + `public`), grouped by
+  kind; private artefacts of others never appear. *(AH 8)*
+
+## Build order
+
+Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14}**,
+**S11 → {S12, S13}**, **S1 → S8 → S9**. S10 can land early (right after S2) to give a
+working surface to iterate against. The data-store branch (S11–S13) is independent of the
+sharing branch and can proceed in parallel once S2 exists.

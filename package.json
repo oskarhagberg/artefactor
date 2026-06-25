@@ -1,0 +1,54 @@
+{
+  "name": "artefactor",
+  "version": "0.0.0",
+  "description": "Hosts and serves trusted HTML artefacts produced by claude.ai / Claude design.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "concurrently -k -n client,server -c cyan,magenta \"vite\" \"tsx watch src/server/index.ts\"",
+    "build": "pnpm build:client && pnpm build:server",
+    "build:client": "vite build",
+    "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.js && esbuild src/infra/db/migrate.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/migrate.js",
+    "start": "node dist/server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.server.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/infra/db/migrate.ts",
+    "db:studio": "drizzle-kit studio"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.4.0",
+      "onFail": "download"
+    }
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.6",
+    "better-sqlite3": "^12.11.1",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.27",
+    "tailwind-merge": "^3.6.0",
+    "tailwind-variants": "^3.2.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.0.1",
+    "concurrently": "^10.0.3",
+    "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.28.1",
+    "node-gyp": "^13.0.0",
+    "svelte": "^5.56.4",
+    "svelte-check": "^4.7.1",
+    "tailwindcss": "^4.3.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  }
+}
