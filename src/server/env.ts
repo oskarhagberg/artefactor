@@ -9,6 +9,34 @@ const schema = z.object({
   ARTEFACTOR_PAYLOAD_DIR: z.string().min(1).default("./data/payloads"),
   MIGRATIONS_DIR: z.string().min(1).default("./src/infra/db/migrations"),
   CLIENT_DIR: z.string().min(1).default("./dist/client"),
+  // BetterAuth (S1 — Identity). Secret signs sessions/tokens; in production it
+  // MUST be supplied. A fixed dev/test default keeps local runs zero-config.
+  BETTER_AUTH_SECRET: z.string().min(1).default("dev-insecure-secret-change-me"),
+  // Public base URL BetterAuth issues callbacks/cookies against.
+  BETTER_AUTH_URL: z.string().min(1).default("http://localhost:3000"),
+  // Comma-separated extra origins allowed to call the auth API (e.g. the Vite
+  // dev server on :5173). The BETTER_AUTH_URL origin is always trusted.
+  AUTH_TRUSTED_ORIGINS: z
+    .string()
+    .default("http://localhost:5173")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean),
+    ),
+}).superRefine((cfg, ctx) => {
+  // Never ship the placeholder secret to production.
+  if (
+    cfg.NODE_ENV === "production" &&
+    cfg.BETTER_AUTH_SECRET === "dev-insecure-secret-change-me"
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["BETTER_AUTH_SECRET"],
+      message: "BETTER_AUTH_SECRET must be set in production",
+    });
+  }
 });
 
 export type Env = z.infer<typeof schema>;

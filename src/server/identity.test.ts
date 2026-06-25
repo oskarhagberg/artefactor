@@ -1,0 +1,54 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Hono } from "hono";
+
+// End-to-end S1: drive the real Hono app (with the BetterAuth handler mounted)
+// against a throwaway SQLite db. Proves the two S1 acceptance criteria — a
+// session exposes a stable ownerId to the BFF, and protected endpoints reject
+// unauthenticated requests (IA1).
+describe("identity (S1)", () => {
+  let app: Hono;
+
+  beforeAll(async () => {
+    // Imports are dynamic so the test setup's env (temp DB path) is read first.
+    const { migrate } = await import(
+      "drizzle-orm/better-sqlite3/migrator"
+    );
+    const { db } = await import("../infra/db/client");
+    migrate(db, { migrationsFolder: "./src/infra/db/migrations" });
+    const { createApp } = await import("./app");
+    app = createApp();
+  });
+
+  it("rejects /api/me without a session (IA1)", async () => {
+    const res = await app.request("/api/me");
+    expect(res.status).toBe(401);
+  });
+
+  it("signs a user up and exposes their ownerId via /api/me", async () => {
+    const signUp = await app.request("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "alice@example.com",
+        password: "correct-horse-battery",
+        name: "Alice",
+      }),
+    });
+    expect(signUp.status).toBe(200);
+
+    const setCookie = signUp.headers.get("set-cookie");
+    expect(setCookie).toBeTruthy();
+    const cookie = setCookie!.split(";")[0]!;
+
+    const me = await app.request("/api/me", { headers: { cookie } });
+    expect(me.status).toBe(200);
+    const body = (await me.json()) as {
+      id: string;
+      email: string;
+      name: string;
+    };
+    expect(body).toMatchObject({ email: "alice@example.com", name: "Alice" });
+    expect(typeof body.id).toBe("string");
+    expect(body.id.length).toBeGreaterThan(0);
+  });
+});
