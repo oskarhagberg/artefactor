@@ -6,12 +6,25 @@ import {
   type CreateArtefactDeps,
 } from "../artefacts/create-artefact.command";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
-import type { ArtefactSummary } from "../../shared/contracts";
+import type {
+  ArtefactListResponse,
+  ArtefactSummary,
+} from "../../shared/contracts";
 
 // BFF routes for the Artefact Hosting context. S2 adds manual HTML upload;
 // API-push ingestion (S9) reuses the same command behind key auth.
 export function createArtefactRoutes(deps: CreateArtefactDeps) {
   const r = new Hono<AuthEnv>();
+
+  // S10 — Owner dashboard. The signed-in owner lists their own artefacts;
+  // archived ones are hidden by default (AH7). Grouping/filtering by kind is a
+  // client concern — the BFF returns the flat, most-recent-first list.
+  r.get("/", requireAuth, async (c) => {
+    const artefacts = await deps.repo.listByOwner(ownerId(c));
+    return c.json<ArtefactListResponse>({
+      artefacts: artefacts.map(toArtefactSummary),
+    });
+  });
 
   // S2 — Create artefact. Authenticated owner uploads title + kind + an HTML
   // file (multipart/form-data). The session user becomes the ownerId (AH1).
@@ -35,7 +48,7 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
         { ownerId: ownerId(c), title, kind, payload },
         deps,
       );
-      return c.json<ArtefactSummary>(toSummary(artefact), 201);
+      return c.json<ArtefactSummary>(toArtefactSummary(artefact), 201);
     } catch (err) {
       if (err instanceof InvariantViolation) {
         return c.json({ error: err.message }, 400);
@@ -47,7 +60,7 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
   return r;
 }
 
-function toSummary(a: Artefact): ArtefactSummary {
+export function toArtefactSummary(a: Artefact): ArtefactSummary {
   return {
     id: a.id,
     ownerId: a.ownerId,

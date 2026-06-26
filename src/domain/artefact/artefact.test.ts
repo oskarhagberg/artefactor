@@ -58,4 +58,35 @@ describe("InMemoryArtefactRepository", () => {
     });
     expect(await repo.findById("missing")).toBeNull();
   });
+
+  describe("listByOwner (S10)", () => {
+    it("returns only the owner's active artefacts, newest first", async () => {
+      const repo = new InMemoryArtefactRepository();
+      const t0 = new Date("2026-01-01T00:00:00Z");
+      const t1 = new Date("2026-01-02T00:00:00Z");
+      await repo.save(createArtefact({ ...base, id: "old", now: t0 }));
+      await repo.save(createArtefact({ ...base, id: "new", now: t1 }));
+      await repo.save(createArtefact({ ...base, id: "other", ownerId: "u2" }));
+      // An archived artefact of the same owner is hidden by default (AH7).
+      const archived = {
+        ...createArtefact({ ...base, id: "arch" }),
+        status: "archived" as const,
+      };
+      await repo.save(archived);
+
+      const list = await repo.listByOwner("u1");
+      expect(list.map((a) => a.id)).toEqual(["new", "old"]);
+    });
+
+    it("includes archived artefacts when asked", async () => {
+      const repo = new InMemoryArtefactRepository();
+      await repo.save(createArtefact(base));
+      await repo.save({
+        ...createArtefact({ ...base, id: "arch" }),
+        status: "archived" as const,
+      });
+      const list = await repo.listByOwner("u1", { includeArchived: true });
+      expect(list.map((a) => a.id).sort()).toEqual(["a1", "arch"]);
+    });
+  });
 });

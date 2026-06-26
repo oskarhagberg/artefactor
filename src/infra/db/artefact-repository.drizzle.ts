@@ -1,8 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { db as Db } from "./client";
 import { artefact } from "./schema";
 import type { Artefact } from "../../domain/artefact/artefact";
-import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type {
+  ArtefactRepository,
+  ListByOwnerOptions,
+} from "../../domain/artefact/artefact-repository";
 
 type Database = typeof Db;
 type ArtefactRow = typeof artefact.$inferSelect;
@@ -39,6 +42,22 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .where(eq(artefact.publicSlug, slug))
       .limit(1);
     return row ? toAggregate(row) : null;
+  }
+
+  async listByOwner(
+    ownerId: string,
+    options?: ListByOwnerOptions,
+  ): Promise<Artefact[]> {
+    const where =
+      options?.includeArchived === true
+        ? eq(artefact.ownerId, ownerId)
+        : and(eq(artefact.ownerId, ownerId), eq(artefact.status, "active"));
+    const rows = await this.db
+      .select()
+      .from(artefact)
+      .where(where)
+      .orderBy(desc(artefact.updatedAt));
+    return rows.map(toAggregate);
   }
 }
 
