@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build stage ----------------------------------------------------------
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 
 # Toolchain for compiling better-sqlite3's native addon.
@@ -22,7 +22,7 @@ RUN pnpm build
 RUN pnpm prune --prod
 
 # ---- runtime stage --------------------------------------------------------
-FROM node:24-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \

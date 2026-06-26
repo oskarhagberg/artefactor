@@ -13,7 +13,7 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
   // The base URL origin is trusted implicitly; add the dev client origin so the
-  // Vite SPA on :5173 can drive the auth API during development.
+  // Vite SPA on :5273 can drive the auth API during development.
   trustedOrigins: env.AUTH_TRUSTED_ORIGINS,
   emailAndPassword: {
     enabled: true,

@@ -15,7 +15,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    // Dedicated, deterministic dev port (5173 commonly collides with other Vite
+    // projects). strictPort makes a collision fail loudly instead of silently
+    // drifting to 5174+, which would break BetterAuth's trusted-origin check.
+    port: 5273,
+    strictPort: true,
     // Proxy API + health to the Hono server during development.
     proxy: {
       "/api": "http://localhost:3000",

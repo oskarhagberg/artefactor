@@ -15,10 +15,10 @@ const schema = z.object({
   // Public base URL BetterAuth issues callbacks/cookies against.
   BETTER_AUTH_URL: z.string().min(1).default("http://localhost:3000"),
   // Comma-separated extra origins allowed to call the auth API (e.g. the Vite
-  // dev server on :5173). The BETTER_AUTH_URL origin is always trusted.
+  // dev server on :5273). The BETTER_AUTH_URL origin is always trusted.
   AUTH_TRUSTED_ORIGINS: z
     .string()
-    .default("http://localhost:5173")
+    .default("http://localhost:5273")
     .transform((s) =>
       s
         .split(",")

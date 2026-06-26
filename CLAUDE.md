@@ -155,8 +155,9 @@ pnpm dlx @better-auth/cli generate --config src/server/auth.ts --output src/infr
 ```
 
 **Native deps:** pnpm 11 blocks dependency build scripts. After a fresh `pnpm install`, run
-**`pnpm approve-builds --all`** to compile `better-sqlite3` (no prebuilt for Node 24 — builds
-from source; needs `python3`/`make`/`g++`). The Dockerfile does this automatically.
+**`pnpm approve-builds --all`** to compile `better-sqlite3` (no prebuilt for Node 26 — builds
+from source; needs `python3`/`make`/`g++`). The Dockerfile does this automatically. The project
+pins **Node 26.4.0** (`.nvmrc`); use it for every command so the native addon's ABI matches.
 
 **Docker:** multi-stage `Dockerfile` builds a single image; `docker-entrypoint.sh` runs
 migrations then starts the server. Mount a volume at `/data` (SQLite DB + artefact payloads).
