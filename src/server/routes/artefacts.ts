@@ -10,6 +10,7 @@ import {
   type CreateArtefactDeps,
 } from "../artefacts/create-artefact.command";
 import { setArtefactVisibilityCommand } from "../artefacts/set-visibility.command";
+import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
   ArtefactListResponse,
@@ -30,6 +31,39 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
     return c.json<ArtefactListResponse>({
       artefacts: artefacts.map(toArtefactSummary),
     });
+  });
+
+  // S4 — Owner views own artefact. Owner-only detail for a single active
+  // artefact (any visibility, including a never-shared private one). Non-owner,
+  // unknown, or archived → 404 (existence/archived-state not leaked, AH7/8).
+  r.get("/:id", requireAuth, async (c) => {
+    try {
+      const artefact = await loadOwnActiveArtefact(deps.repo, {
+        id: c.req.param("id"),
+        ownerId: ownerId(c),
+      });
+      return c.json<ArtefactSummary>(toArtefactSummary(artefact));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      throw err;
+    }
+  });
+
+  // S4 — Owner views own artefact content. Serves the owner's trusted HTML
+  // as-is, by id, at any visibility — the in-app preview path (the `/a/:slug`
+  // route in S6 only works once an artefact is shared). Archived → 404.
+  r.get("/:id/raw", requireAuth, async (c) => {
+    try {
+      const artefact = await loadOwnActiveArtefact(deps.repo, {
+        id: c.req.param("id"),
+        ownerId: ownerId(c),
+      });
+      const bytes = await deps.payloadStore.get(artefact.payloadRef);
+      return c.html(new TextDecoder().decode(bytes));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.notFound();
+      throw err;
+    }
   });
 
   // S5 — Share / unshare. Owner sets the visibility tier; `private` unshares

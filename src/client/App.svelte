@@ -219,6 +219,14 @@
                 <li class="flex items-center justify-between gap-3 px-3 py-2">
                   <span class="truncate text-sm">{a.title}</span>
                   <span class="flex shrink-0 items-center gap-2 text-xs">
+                    <a
+                      class="text-blue-600 underline"
+                      href={`/api/artefacts/${a.id}/raw`}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      open
+                    </a>
                     <select
                       class="rounded border px-1 py-0.5 text-xs"
                       value={a.visibility}

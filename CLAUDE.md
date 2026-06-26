@@ -2,22 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S14 done; building feature slices
+## Status: S4 done; building feature slices
 
 **S0 (scaffold), S1 (Identity), S2 (Create), S10 (Dashboard), S5 (Share/unshare), S6 (Serve
-by slug), and S14 (Browse gallery) are complete** — the monolith builds, runs, migrates, and
-tests green. Auth is wired (`src/server/auth.ts`): email + password via BetterAuth's Drizzle
-adapter, session middleware + `requireAuth` guard, and a protected `GET /api/me`. Artefact
-Hosting so far: a Drizzle `ArtefactRepository` (`save`/`findById`/`findBySlug`/`listByOwner`/
-`listShared`), application commands for create and set-visibility, the pure access matrix
-(`domain/artefact/access.ts`), shared port adapters (`src/server/adapters.ts`), and routes
-`POST /api/artefacts` (multipart upload → `active`/`private`), `GET /api/artefacts` (owner
-dashboard), `PUT /api/artefacts/:id/visibility` (share/unshare), `GET /api/gallery` (browse
-shared, signed-in), and `GET /a/:slug` (public render route, access matrix, raw trusted
-HTML). See `docs/specs/fdd/slice-dag.md` §S1–S2, S5–S6, S10, S14 implementation notes. Next
-up is **S3 (edit)**, **S4 (owner view)**, **S7 (archive/restore)**, and the data branch
-**S11**. Development is **spec-driven**: locate the governing DDD invariant and FDD slice
-before coding, build test-first, and keep spec ↔ tests ↔ code in sync in the same change.
+by slug), S14 (Browse gallery), and S4 (Owner view) are complete** — the monolith builds,
+runs, migrates, and tests green. Auth is wired (`src/server/auth.ts`): email + password via
+BetterAuth's Drizzle adapter, session middleware + `requireAuth` guard, and a protected
+`GET /api/me`. Artefact Hosting so far: a Drizzle `ArtefactRepository` (`save`/`findById`/
+`findBySlug`/`listByOwner`/`listShared`), application commands for create and set-visibility,
+the pure access matrix (`domain/artefact/access.ts`), shared port adapters
+(`src/server/adapters.ts`), and routes `POST /api/artefacts` (multipart upload →
+`active`/`private`), `GET /api/artefacts` (owner dashboard), `GET /api/artefacts/:id` +
+`/:id/raw` (owner view, any visibility), `PUT /api/artefacts/:id/visibility` (share/unshare),
+`GET /api/gallery` (browse shared, signed-in), and `GET /a/:slug` (public render route,
+access matrix, raw trusted HTML). See `docs/specs/fdd/slice-dag.md` §S1–S2, S4–S6, S10, S14
+implementation notes. Next up is **S3 (edit)**, **S7 (archive/restore)**, and the data branch
+**S11 → {S12, S13}**. Development is **spec-driven**: locate the governing DDD invariant and
+FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in sync in the same
+change.
 
 ### Architecture at a glance
 
