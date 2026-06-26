@@ -63,7 +63,7 @@ Aggregate root. The consistency boundary for one hosted artefact.
 | `public` | view + edit | view | view |
 
 Archived artefacts return 404 to everyone (including the owner's public-style view); the
-owner reaches them only via the dashboard's archived filter to restore them.
+owner reaches them only via the "Your artefacts" archived filter to restore them.
 
 ## State / transitions
 
@@ -103,8 +103,8 @@ The data entries themselves are modelled in `artefact-data.md`.
 - **Payloads live on the filesystem.** The SQLite row stores metadata plus a **reference**
   to the file (path/key), the **byte size**, and a **content hash**. SQLite never holds the
   100 MB payload inline. Filesystem layout and the on-disk root are an S0/S2 concern.
-- **Unauthenticated access is by direct slug link only** — there is no public gallery. The
-  browse gallery (`authenticated`/`public` artefacts grouped by kind) is for signed-in
+- **Unauthenticated access is by direct slug link only** — there is no public browse view.
+  "Shared with you" (`authenticated`/`public` artefacts grouped by kind) is for signed-in
   users only.
 
 ## Decided

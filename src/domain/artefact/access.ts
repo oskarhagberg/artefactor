@@ -2,7 +2,7 @@ import type { Artefact } from "./artefact";
 
 // The fields the access matrix depends on — a viewer-facing slice of the
 // aggregate. Keeping the input narrow makes the rule easy to reason about and
-// reuse (slug serving in S6, the gallery in S14, data access in S11/S12).
+// reuse (slug serving in S6, "Shared with you" in S14, data access in S11/S12).
 export type ViewableArtefact = Pick<
   Artefact,
   "visibility" | "status" | "ownerId"
@@ -18,7 +18,7 @@ export type ViewableArtefact = Pick<
 //   public         |  yes  |       yes       |       yes
 //
 // An archived artefact is never served — it returns false to everyone, owner
-// included (the owner reaches it only via the dashboard's archived filter).
+// included (the owner reaches it only via the "Your artefacts" archived filter).
 export function canViewArtefact(
   artefact: ViewableArtefact,
   viewerId: string | null,

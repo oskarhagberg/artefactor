@@ -103,7 +103,7 @@ describe("edit + archive/restore (S3, S7)", () => {
       expect(archived.status).toBe(200);
       expect(((await archived.json()) as ArtefactSummary).status).toBe("archived");
 
-      // Hidden from the active dashboard + owner view + slug serving; visible in archived list.
+      // Hidden from active "Your artefacts" + owner view + slug serving; visible in archived list.
       expect(await listTitles(owner)).not.toContain("Lifecycle");
       expect(await listTitles(owner, true)).toContain("Lifecycle");
       expect((await app.request(`/api/artefacts/${a.id}`, { headers: { cookie: owner } })).status).toBe(404);

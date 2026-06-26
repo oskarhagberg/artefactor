@@ -244,7 +244,7 @@ describe("InMemoryArtefactRepository", () => {
       expect(shared.map((a) => a.id).sort()).toEqual(["auth", "pub"]);
     });
 
-    it("excludes the viewer's own shared artefacts (they live on the dashboard)", async () => {
+    it("excludes the viewer's own shared artefacts (they live in Your artefacts)", async () => {
       const repo = await seed();
       // u1 owns "pub" → it drops out; only u2's "auth" remains.
       const shared = await repo.listShared("u1");

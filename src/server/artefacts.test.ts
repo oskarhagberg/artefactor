@@ -98,7 +98,7 @@ describe("create artefact (S2)", () => {
     expect(res.status).toBe(400);
   });
 
-  // S10 — owner dashboard listing. Uses a fresh user so counts are exact and
+  // S10 — "Your artefacts" listing. Uses a fresh user so counts are exact and
   // independent of the artefacts created by the tests above.
   describe("list own artefacts (S10)", () => {
     let listerCookie: string;

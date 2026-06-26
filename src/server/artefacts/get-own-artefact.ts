@@ -5,8 +5,8 @@ import type { ArtefactRepository } from "../../domain/artefact/artefact-reposito
 // Load an artefact for owner-scoped viewing (S4). The requester must own it and
 // it must be active. Missing, not-owned, and archived all surface identically as
 // not-found, so neither a private artefact's existence nor its archived state
-// leaks (AH7/AH8). The owner reaches archived artefacts only via the dashboard's
-// archived filter (to restore them), never this view.
+// leaks (AH7/AH8). The owner reaches archived artefacts only via the "Your
+// artefacts" archived filter (to restore them), never this view.
 export async function loadOwnActiveArtefact(
   repo: ArtefactRepository,
   params: { id: string; ownerId: string },

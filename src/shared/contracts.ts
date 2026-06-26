@@ -32,7 +32,7 @@ export interface ArtefactSummary {
   updatedAt: string;
 }
 
-// S10 — Owner dashboard. The owner's own artefacts (archived hidden by default),
+// S10 — "Your artefacts". The owner's own artefacts (archived hidden by default),
 // most-recently-updated first. The client groups/filters by kind.
 export interface ArtefactListResponse {
   artefacts: ArtefactSummary[];

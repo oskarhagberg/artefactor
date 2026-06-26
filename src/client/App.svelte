@@ -82,7 +82,7 @@
     }
   }
 
-  // S10 — owner dashboard: list the signed-in owner's own artefacts.
+  // "Your artefacts" — list the signed-in owner's own artefacts.
   const VISIBILITY_LABEL: Record<ArtefactSummary["visibility"], string> = {
     private: "Private",
     authenticated: "Other users",
@@ -133,7 +133,7 @@
     });
     if (res.ok) {
       loadArtefacts();
-      loadGallery();
+      loadShared();
     } else {
       listError = `Could not update visibility (${res.status})`;
     }
@@ -166,7 +166,7 @@
     if (res.ok) {
       editingId = null;
       loadArtefacts();
-      loadGallery();
+      loadShared();
     } else {
       const body = await res.json().catch(() => ({}));
       listError = body.error ?? `Could not save (${res.status})`;
@@ -193,7 +193,7 @@
     const res = await fetch(`/api/artefacts/${a.id}/archive`, { method: "POST" });
     if (res.ok) {
       loadArtefacts();
-      loadGallery();
+      loadShared();
       loadArchived();
     } else {
       listError = `Could not archive (${res.status})`;
@@ -205,35 +205,35 @@
     const res = await fetch(`/api/artefacts/${a.id}/restore`, { method: "POST" });
     if (res.ok) {
       loadArtefacts();
-      loadGallery();
+      loadShared();
       loadArchived();
     } else {
       listError = `Could not restore (${res.status})`;
     }
   }
 
-  // S14 — browse gallery: artefacts shared to the signed-in user.
-  let gallery = $state<ArtefactSummary[]>([]);
-  let galleryError = $state<string | null>(null);
+  // "Shared with you" — active artefacts shared to the signed-in user by others.
+  let sharedWithYou = $state<ArtefactSummary[]>([]);
+  let sharedError = $state<string | null>(null);
 
-  async function loadGallery() {
-    galleryError = null;
-    const res = await fetch("/api/gallery");
+  async function loadShared() {
+    sharedError = null;
+    const res = await fetch("/api/shared");
     if (res.ok) {
-      gallery = ((await res.json()) as { artefacts: ArtefactSummary[] })
+      sharedWithYou = ((await res.json()) as { artefacts: ArtefactSummary[] })
         .artefacts;
     } else if (res.status !== 401) {
-      galleryError = `${res.status} ${res.statusText}`;
+      sharedError = `${res.status} ${res.statusText}`;
     }
   }
 
   $effect(() => {
-    if ($session.data) loadGallery();
+    if ($session.data) loadShared();
   });
 
-  const galleryGrouped = $derived.by(() => {
+  const sharedGrouped = $derived.by(() => {
     const groups = new Map<string, ArtefactSummary[]>();
-    for (const a of gallery) {
+    for (const a of sharedWithYou) {
       (groups.get(a.kind) ?? groups.set(a.kind, []).get(a.kind)!).push(a);
     }
     return [...groups.entries()];
@@ -426,12 +426,12 @@
 
     <section class="space-y-3 border-t pt-6">
       <h2 class="text-lg font-medium">Shared with you</h2>
-      {#if galleryError}
-        <p class="text-sm text-red-600">Could not load gallery: {galleryError}</p>
-      {:else if galleryGrouped.length === 0}
+      {#if sharedError}
+        <p class="text-sm text-red-600">Could not load shared artefacts: {sharedError}</p>
+      {:else if sharedGrouped.length === 0}
         <p class="text-sm text-zinc-500">Nothing shared with you yet.</p>
       {:else}
-        {#each galleryGrouped as [kind, items] (kind)}
+        {#each sharedGrouped as [kind, items] (kind)}
           <div class="space-y-1">
             <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
             <ul class="divide-y rounded border">

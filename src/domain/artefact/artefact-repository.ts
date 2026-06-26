@@ -1,9 +1,9 @@
 import type { Artefact } from "./artefact";
 
-// Options for owner-scoped listing (S10 dashboard).
+// Options for owner-scoped listing ("Your artefacts", S10).
 export interface ListByOwnerOptions {
   // Include archived artefacts. Defaults to false — archived artefacts are
-  // hidden from the default dashboard listing (AH7).
+  // hidden from the default "Your artefacts" listing (AH7).
   includeArchived?: boolean;
 }
 
@@ -19,8 +19,8 @@ export interface ArtefactRepository {
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]>;
   // Active artefacts shared *to* the viewer — visibility `authenticated` or
-  // `public` — most-recently-updated first. The browse gallery (S14): "shared
-  // with you" means *others'* artefacts, so the viewer's own are excluded (they
-  // live on the owner dashboard). Private never appears (AH8).
+  // `public` — most-recently-updated first. "Shared with you" (S14) means
+  // *others'* artefacts, so the viewer's own are excluded (they live in "Your
+  // artefacts"). Private never appears (AH8).
   listShared(viewerId: string): Promise<Artefact[]>;
 }

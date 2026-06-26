@@ -114,7 +114,7 @@ Initial `schema.ts` (domain tables; BetterAuth contributes its own via its Drizz
   `payload_ref` (text — filesystem key), `payload_bytes` (integer),
   `payload_hash` (text), `created_at`, `updated_at`, `archived_at` (nullable).
   - Unique index on `public_slug`. Index on `owner_id`. Index on `(status, visibility)` for
-    the gallery.
+    the "Shared with you" query.
 - **`data_entry`**: `id` (pk), `artefact_id` (text → artefact, fk),
   `author_id` (text → user), `blob` (text — JSON), `created_at`, `updated_at`.
   - **Unique index on `(artefact_id, author_id)`** (enforces one-per-pair / upsert).

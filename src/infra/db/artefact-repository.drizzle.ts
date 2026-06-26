@@ -62,7 +62,7 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
 
   async listShared(viewerId: string): Promise<Artefact[]> {
     // Uses the (status, visibility) index. Cross-owner but excludes the viewer's
-    // own (those live on their dashboard); private never matches.
+    // own (those live in "Your artefacts"); private never matches.
     const rows = await this.db
       .select()
       .from(artefact)

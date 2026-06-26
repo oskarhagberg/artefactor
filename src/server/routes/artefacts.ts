@@ -40,12 +40,12 @@ export type ArtefactRoutesDeps = CreateArtefactDeps & {
 export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   const r = new Hono<AuthEnv>();
 
-  // S10 — Owner dashboard. The signed-in owner lists their own artefacts;
+  // S10 — "Your artefacts". The signed-in owner lists their own artefacts;
   // archived ones are hidden by default (AH7). Grouping/filtering by kind is a
   // client concern — the BFF returns the flat, most-recent-first list.
   r.get("/", requireAuth, async (c) => {
-    // `?archived=true` returns the owner's archived artefacts (the dashboard's
-    // archived view, used to restore them in S7); otherwise active only.
+    // `?archived=true` returns the owner's archived artefacts (the "Your
+    // artefacts" archived view, used to restore them in S7); otherwise active only.
     const archived = c.req.query("archived") === "true";
     const owned = await deps.repo.listByOwner(ownerId(c), {
       includeArchived: archived,

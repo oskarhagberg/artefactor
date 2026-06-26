@@ -17,9 +17,9 @@ S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
         │                     ├──► S4 Owner views own artefact
         │                     ├──► S5 Share / unshare (private↔authenticated↔public; mint+retain slug)
         │                     │            ├──► S6 Serve artefact by slug (access matrix)
-        │                     │            └──► S14 Browse gallery (shared+public, grouped by kind)
+        │                     │            └──► S14 Shared with you (others' shared+public, by kind)
         │                     ├──► S7 Archive / restore
-        │                     ├──► S10 Owner dashboard (list own artefacts)
+        │                     ├──► S10 Your artefacts (list own artefacts)
         │                     └──► S11 Store: read/write own data blob
         │                                  ├──► S12 Host UI: data-context switcher (load another author, read-only)
         │                                  └──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
@@ -111,7 +111,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 
 ### S4 — Owner views own artefact — **done**
 - Owner can view their own `active` artefact at any visibility.
-- Archived gets 404 (reached only via dashboard restore). *(AH 7)*
+- Archived gets 404 (reached only via "Your artefacts" restore). *(AH 7)*
 
 **Implementation notes (from building S4):**
 - **`loadOwnActiveArtefact(repo, { id, ownerId })`** (`src/server/artefacts/get-own-artefact.ts`):
@@ -122,7 +122,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   (trusted HTML, served as-is, by id at any visibility) — both `requireAuth`, both `404` on
   not-found/archived. The by-id raw route is the in-app preview path: unlike `/a/:slug` (S6),
   it works for a never-shared private artefact that has no slug.
-- **Client** (`App.svelte`): an `open` link per dashboard row → `/api/artefacts/:id/raw`.
+- **Client** (`App.svelte`): an `open` link per "Your artefacts" row → `/api/artefacts/:id/raw`.
 - **Tests:** `loadOwnActiveArtefact` unit (own/active, non-owner, unknown, archived → not
   found) and end-to-end (owner detail + raw HTML for a private no-slug artefact, non-owner
   `404`, archived `404`, unauth `401`).
@@ -147,7 +147,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   share, and delegates the transition + archived guard to the domain.
 - **BFF** `PUT /api/artefacts/:id/visibility` (`{ visibility }`): validates the tier,
   maps `ArtefactNotFound → 404`, `InvariantViolation → 400`, returns the updated summary.
-- **Client** (`App.svelte`): a per-artefact visibility `<select>` in the dashboard that PUTs
+- **Client** (`App.svelte`): a per-artefact visibility `<select>` in "Your artefacts" that PUTs
   the change and reloads; the share link appears once a slug exists.
 - **Tests:** domain unit (mint/retain/tier/archived/timestamps), command unit (slug reuse
   across unshare→reshare, collision regen, non-owner/unknown → not-found), and end-to-end
@@ -162,7 +162,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 **Implementation notes (from building S6):**
 - **Domain** `access.ts`: pure `canViewArtefact(artefact, viewerId)` encoding the matrix,
   gated by archived-is-inert (AH7). `viewerId = null` is the unauthenticated viewer. Reused
-  later by the gallery (S14) and data access (S11/S12).
+  later by "Shared with you" (S14) and data access (S11/S12).
 - **Serving route** `GET /a/:slug` (`routes/serve.ts`) — its own `attachSession` (it lives
   outside `/api`), resolves the slug via `repo.findBySlug`, applies the matrix, and on allow
   streams the trusted HTML **as-is** via `c.html` (`text/html; charset=UTF-8`, no
@@ -187,8 +187,9 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   (non-owner / unknown / already-archived → not-found); restore loads regardless of status
   via `loadOwnArtefact` and lets the domain reject a non-archived one (→ 400).
 - **BFF** `POST /api/artefacts/:id/archive` + `/restore`; `GET /api/artefacts?archived=true`
-  lists the owner's archived artefacts (the dashboard's restore view). Archived artefacts are
-  already un-served by the S4/S6 read paths and the gallery (all gate on `status === active`),
+  lists the owner's archived artefacts (the "Your artefacts" restore view). Archived artefacts
+  are already un-served by the S4/S6 read paths and "Shared with you" (all gate on `status ===
+  active`),
   so archive makes them inert everywhere; their data entries become inert too once S11 lands
   (the data paths will gate on artefact status).
 - **Client** (`App.svelte`): an `archive` button per active row and an "Archived" section
@@ -206,7 +207,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   create invariants. *(AH 10, IA 2)*
 - A revoked/invalid key is rejected. *(IA 3)*
 
-### S10 — Owner dashboard — **done**
+### S10 — Your artefacts (owner's own list) — **done**
 - Owner lists their own `active` artefacts (archived hidden by default); shows visibility +
   shareable link when shared, grouped/filterable by kind.
 
@@ -217,11 +218,11 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - BFF **`GET /api/artefacts`** (`requireAuth` → owner-scoped) returns
   `ArtefactListResponse` via the shared `toArtefactSummary` mapper; archived hidden by
   default (AH7). Grouping/filtering by kind is a client concern.
-- **Client** (`App.svelte`): a "Your artefacts" dashboard grouped by kind with a kind
+- **Client** (`App.svelte`): a "Your artefacts" list grouped by kind with a kind
   filter, the visibility tier (`authenticated` shown as the UI label "Other users"), and a
   share link when a slug is present; reloads after a successful upload.
 - **Tests:** in-memory `listByOwner` unit tests (owner+active filter, newest-first, archived
-  hidden / opt-in) and an end-to-end dashboard test (fresh user → exact-count list, newest
+  hidden / opt-in) and an end-to-end "Your artefacts" test (fresh user → exact-count list, newest
   first, excludes archived + other owners, 401 unauth).
 
 ### S11 — Store: read/write own data blob — **done** *(shipped with S13)*
@@ -321,25 +322,25 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   `QuotaExceededError`) plus injection/escaping tests; integration tests assert the bootstrap
   is injected and seeded with the viewer's own data (read-write) vs anonymous (read-only).
 
-### S14 — Browse gallery — **done**
+### S14 — Shared with you — **done**
 - A signed-in user browses artefacts shared to them (`authenticated` + `public`), grouped by
-  kind; their own artefacts (on the dashboard) and others' private ones never appear. *(AH 8)*
+  kind; their own artefacts (in "Your artefacts") and others' private ones never appear. *(AH 8)*
 
 **Implementation notes (from building S14):**
 - Repository port method **`listShared(viewerId)`** — active artefacts with visibility
   `authenticated` or `public`, across owners but **excluding the viewer's own**,
   most-recently-updated first. Drizzle impl uses the `(status, visibility)` index (`inArray`)
   plus `ne(ownerId, viewerId)`; in-memory mirrors it. Private never matches (AH8). *("Shared
-  with you" means **others'** artefacts — the viewer's own shared artefacts live on their
-  dashboard, not the gallery. This reverses the original S14 decision to include them.)*
-- BFF **`GET /api/gallery`** is `requireAuth` — the gallery is signed-in users only
+  with you" means **others'** artefacts — the viewer's own shared artefacts live in "Your
+  artefacts", not here. This reverses the original S14 decision to include them.)*
+- BFF **`GET /api/shared`** is `requireAuth` — "Shared with you" is signed-in users only
   (unauthenticated access is by slug link only). Returns `ArtefactListResponse` via the
   shared `toArtefactSummary`; client groups by kind.
 - **Client** (`App.svelte`): a "Shared with you" section grouped by kind, each item an
   `open` link to `/a/:slug` (the S6 serving route); reloads when the owner changes a
   visibility tier.
 - **Tests:** in-memory `listShared` unit (active authenticated+public across owners; excludes
-  private + archived; **excludes the viewer's own**) and an end-to-end gallery test (two owners
+  private + archived; **excludes the viewer's own**) and an end-to-end "Shared with you" test (two owners
   → a signed-in viewer sees others' shared artefacts, never their own nor others' private;
   `401` unauthenticated).
 

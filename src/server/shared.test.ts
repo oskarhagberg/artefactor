@@ -2,10 +2,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Hono } from "hono";
 import type { ArtefactSummary } from "../shared/contracts";
 
-// End-to-end S14: the signed-in browse gallery. Two owners publish artefacts at
-// various tiers; a signed-in viewer sees others' shared artefacts (across
-// owners), but not their own (those live on the dashboard) nor anyone's private.
-describe("browse gallery (S14)", () => {
+// End-to-end S14: the signed-in "Shared with you" view. Two owners publish
+// artefacts at various tiers; a signed-in viewer sees others' shared artefacts
+// (across owners), but not their own (those are in "Your artefacts") nor
+// anyone's private.
+describe("shared with you (S14)", () => {
   let app: Hono;
   let alice: string;
   let bob: string;
@@ -42,8 +43,8 @@ describe("browse gallery (S14)", () => {
     return created;
   }
 
-  function gallery(cookie?: string) {
-    return app.request("/api/gallery", {
+  function shared(cookie?: string) {
+    return app.request("/api/shared", {
       headers: cookie ? { cookie } : {},
     });
   }
@@ -63,17 +64,17 @@ describe("browse gallery (S14)", () => {
     await publish(bob, "Bob public", "public");
   });
 
-  it("requires a signed-in user (gallery is not anonymous)", async () => {
-    expect((await gallery()).status).toBe(401);
+  it("requires a signed-in user (not anonymous)", async () => {
+    expect((await shared()).status).toBe(401);
   });
 
   it("lists others' shared artefacts, excluding the viewer's own and others' private", async () => {
-    const res = await gallery(bob);
+    const res = await shared(bob);
     expect(res.status).toBe(200);
     const { artefacts } = (await res.json()) as { artefacts: ArtefactSummary[] };
     const titles = artefacts.map((a) => a.title).sort();
-    // Bob sees Alice's shared artefacts, but NOT his own "Bob public" (that
-    // lives on his dashboard) and NOT Alice's private one.
+    // Bob sees Alice's shared artefacts, but NOT his own "Bob public" (that is
+    // in his "Your artefacts") and NOT Alice's private one.
     expect(titles).toEqual(["Alice authenticated", "Alice public"]);
     expect(titles).not.toContain("Bob public");
     expect(titles).not.toContain("Alice private");

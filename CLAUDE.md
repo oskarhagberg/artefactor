@@ -13,7 +13,7 @@ middleware + `requireAuth` guard, protected `GET /api/me`. Artefact Hosting: Dri
 access matrix (`domain/artefact/access.ts`), commands (create/edit/set-visibility/archive/
 restore) under `src/server/artefacts/`, and routes `POST|GET /api/artefacts`, `GET|PATCH
 /api/artefacts/:id` (+`/:id/raw`), `PUT /api/artefacts/:id/visibility`, `POST
-/api/artefacts/:id/archive|restore`, `GET /api/gallery`, `GET /a/:slug` (+ `/a/:slug/frame`).
+/api/artefacts/:id/archive|restore`, `GET /api/shared`, `GET /a/:slug` (+ `/a/:slug/frame`).
 Artefact Data
 (`src/domain/data/`, `src/server/data/`): the `DataEntry` aggregate (opaque ≤5 MB JSON blob,
 one per `(artefact, author)`), a Drizzle data repo, and `GET|PUT|DELETE
@@ -79,7 +79,7 @@ code in sync in the same commit.
 - **Visibility (3 tiers):** `private` (owner) | `authenticated` (any signed-in user) |
   `public` (anyone). Sharing mints a unique slug; the slug is **retained** when set back to
   private (link 404s while private). Unauthenticated access is **by slug link only** — the
-  browse gallery is signed-in users only.
+  "Shared with you" view is signed-in users only.
 - **Kind:** metadata only; drives grouping when browsing.
 - **Slug:** short random URL-safe token, collision-checked at mint.
 - **Backend store:** per-`(artefact, author)` **opaque** JSON blob, **single upsert** (cap

@@ -20,4 +20,5 @@ Shared vocabulary for Artefactor. Use these terms exactly — in code, specs, te
 | **Restore** | Return an `archived` artefact to `active`. |
 | **API key** | A credential (managed via BetterAuth's API-key plugin) that lets an external process push artefacts on behalf of an Account. |
 | **Ingestion** | How an artefact enters the system: **manual upload** (authenticated UI) or **API push** (programmatic, API-key authenticated). Both enforce identical invariants. |
-| **Browse / gallery** | The view where a signed-in user lists artefacts shared to them (`authenticated` or `public`), grouped/filterable by **kind**. Distinct from the owner **dashboard** (their own artefacts). |
+| **Shared with you** | The view where a signed-in user lists artefacts shared to them by **others** (`authenticated` or `public`), grouped/filterable by **kind**. Distinct from **Your artefacts** (the owner's own list). |
+| **Your artefacts** | The signed-in owner's view of the artefacts **they own** (manage, share, archive). Distinct from **Shared with you** (others' artefacts). |
