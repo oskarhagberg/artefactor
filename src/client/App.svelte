@@ -75,10 +75,53 @@
       created = await res.json();
       aTitle = "";
       aFiles = null;
+      loadArtefacts();
     } else {
       const body = await res.json().catch(() => ({}));
       aError = body.error ?? `${res.status} ${res.statusText}`;
     }
+  }
+
+  // S10 — owner dashboard: list the signed-in owner's own artefacts.
+  const VISIBILITY_LABEL: Record<ArtefactSummary["visibility"], string> = {
+    private: "Private",
+    authenticated: "Other users",
+    public: "Public",
+  };
+
+  let artefacts = $state<ArtefactSummary[]>([]);
+  let listError = $state<string | null>(null);
+  let filterKind = $state<string>("all");
+
+  async function loadArtefacts() {
+    listError = null;
+    const res = await fetch("/api/artefacts");
+    if (res.ok) {
+      artefacts = ((await res.json()) as { artefacts: ArtefactSummary[] })
+        .artefacts;
+    } else if (res.status !== 401) {
+      listError = `${res.status} ${res.statusText}`;
+    }
+  }
+
+  // Load (and reload) whenever a session is present.
+  $effect(() => {
+    if ($session.data) loadArtefacts();
+  });
+
+  // Group the (kind-filtered) artefacts by kind for display.
+  const grouped = $derived.by(() => {
+    const groups = new Map<string, ArtefactSummary[]>();
+    for (const a of artefacts) {
+      if (filterKind !== "all" && a.kind !== filterKind) continue;
+      (groups.get(a.kind) ?? groups.set(a.kind, []).get(a.kind)!).push(a);
+    }
+    return [...groups.entries()];
+  });
+
+  function shareUrl(a: ArtefactSummary): string | null {
+    if (!a.publicSlug) return null;
+    return `${location.origin}/a/${a.publicSlug}`;
   }
 </script>
 
@@ -104,6 +147,50 @@
           )}</pre>
       {:else if meError}
         <p class="text-sm text-red-600">/api/me failed: {meError}</p>
+      {/if}
+    </section>
+
+    <section class="space-y-3 border-t pt-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-medium">Your artefacts</h2>
+        <select
+          class="rounded border px-2 py-1 text-sm"
+          bind:value={filterKind}
+        >
+          <option value="all">All kinds</option>
+          {#each ARTEFACT_KINDS as kind (kind)}
+            <option value={kind}>{kind}</option>
+          {/each}
+        </select>
+      </div>
+
+      {#if listError}
+        <p class="text-sm text-red-600">Could not load artefacts: {listError}</p>
+      {:else if grouped.length === 0}
+        <p class="text-sm text-zinc-500">No artefacts yet.</p>
+      {:else}
+        {#each grouped as [kind, items] (kind)}
+          <div class="space-y-1">
+            <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
+            <ul class="divide-y rounded border">
+              {#each items as a (a.id)}
+                <li class="flex items-center justify-between gap-3 px-3 py-2">
+                  <span class="truncate text-sm">{a.title}</span>
+                  <span class="flex shrink-0 items-center gap-2 text-xs">
+                    <span class="rounded bg-zinc-100 px-2 py-0.5">
+                      {VISIBILITY_LABEL[a.visibility]}
+                    </span>
+                    {#if shareUrl(a)}
+                      <a class="text-blue-600 underline" href={shareUrl(a)}>
+                        link
+                      </a>
+                    {/if}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
       {/if}
     </section>
 

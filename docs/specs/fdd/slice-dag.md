@@ -124,9 +124,23 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   create invariants. *(AH 10, IA 2)*
 - A revoked/invalid key is rejected. *(IA 3)*
 
-### S10 — Owner dashboard
+### S10 — Owner dashboard — **done**
 - Owner lists their own `active` artefacts (archived hidden by default); shows visibility +
   shareable link when shared, grouped/filterable by kind.
+
+**Implementation notes (from building S10):**
+- New repository port method **`listByOwner(ownerId, { includeArchived })`** (default
+  active-only, most-recently-updated first), implemented in both the in-memory and Drizzle
+  (`and(owner, status='active')`, `orderBy desc(updatedAt)`) repos.
+- BFF **`GET /api/artefacts`** (`requireAuth` → owner-scoped) returns
+  `ArtefactListResponse` via the shared `toArtefactSummary` mapper; archived hidden by
+  default (AH7). Grouping/filtering by kind is a client concern.
+- **Client** (`App.svelte`): a "Your artefacts" dashboard grouped by kind with a kind
+  filter, the visibility tier (`authenticated` shown as the UI label "Other users"), and a
+  share link when a slug is present; reloads after a successful upload.
+- **Tests:** in-memory `listByOwner` unit tests (owner+active filter, newest-first, archived
+  hidden / opt-in) and an end-to-end dashboard test (fresh user → exact-count list, newest
+  first, excludes archived + other owners, 401 unauth).
 
 ### S11 — Store: read/write own data blob
 - Authenticated viewer upserts their own JSON blob for an artefact (one per author). *(AD 1, 2, 3)*

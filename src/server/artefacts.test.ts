@@ -97,4 +97,79 @@ describe("create artefact (S2)", () => {
     const res = await postArtefact({ title: "Bad kind", kind: "spreadsheet" });
     expect(res.status).toBe(400);
   });
+
+  // S10 — owner dashboard listing. Uses a fresh user so counts are exact and
+  // independent of the artefacts created by the tests above.
+  describe("list own artefacts (S10)", () => {
+    let listerCookie: string;
+    let listerId: string;
+
+    async function createAs(cookieValue: string, title: string, kind: string) {
+      const form = new FormData();
+      form.set("title", title);
+      form.set("kind", kind);
+      form.set("payload", new File(["<h1>x</h1>"], "a.html"));
+      return app.request("/api/artefacts", {
+        method: "POST",
+        body: form,
+        headers: { cookie: cookieValue },
+      });
+    }
+
+    beforeAll(async () => {
+      const signUp = await app.request("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "lister@example.com",
+          password: "correct-horse-battery",
+          name: "Lister",
+        }),
+      });
+      listerCookie = signUp.headers.get("set-cookie")!.split(";")[0]!;
+      const me = await app.request("/api/me", {
+        headers: { cookie: listerCookie },
+      });
+      listerId = ((await me.json()) as { id: string }).id;
+
+      await createAs(listerCookie, "First", "prototype");
+      await createAs(listerCookie, "Second", "form");
+
+      // An archived artefact for this owner — must be hidden from the list (AH7).
+      const { db } = await import("../infra/db/client");
+      const { DrizzleArtefactRepository } = await import(
+        "../infra/db/artefact-repository.drizzle"
+      );
+      const { createArtefact } = await import("../domain/artefact/artefact");
+      const repo = new DrizzleArtefactRepository(db);
+      await repo.save({
+        ...createArtefact({
+          id: "archived-one",
+          ownerId: listerId,
+          title: "Archived",
+          kind: "other",
+          payload: { ref: "ref-x", bytes: 10, hash: "h" },
+        }),
+        status: "archived",
+      });
+    });
+
+    it("rejects an unauthenticated list with 401", async () => {
+      const res = await app.request("/api/artefacts");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns only the caller's active artefacts, newest first", async () => {
+      const res = await app.request("/api/artefacts", {
+        headers: { cookie: listerCookie },
+      });
+      expect(res.status).toBe(200);
+      const { artefacts } = (await res.json()) as {
+        artefacts: { title: string; ownerId: string; status: string }[];
+      };
+      expect(artefacts.map((a) => a.title)).toEqual(["Second", "First"]);
+      expect(artefacts.every((a) => a.ownerId === listerId)).toBe(true);
+      expect(artefacts.some((a) => a.title === "Archived")).toBe(false);
+    });
+  });
 });

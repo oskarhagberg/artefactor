@@ -1,5 +1,8 @@
 import type { Artefact } from "./artefact";
-import type { ArtefactRepository } from "./artefact-repository";
+import type {
+  ArtefactRepository,
+  ListByOwnerOptions,
+} from "./artefact-repository";
 
 // In-memory implementation of the ArtefactRepository port. This is the primary
 // TDD test double for domain slices (S2+) — no database required.
@@ -20,5 +23,20 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
       if (a.publicSlug === slug) return { ...a };
     }
     return null;
+  }
+
+  async listByOwner(
+    ownerId: string,
+    options?: ListByOwnerOptions,
+  ): Promise<Artefact[]> {
+    const includeArchived = options?.includeArchived ?? false;
+    return [...this.store.values()]
+      .filter(
+        (a) =>
+          a.ownerId === ownerId &&
+          (includeArchived || a.status === "active"),
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((a) => ({ ...a }));
   }
 }
