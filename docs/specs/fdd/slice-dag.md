@@ -97,9 +97,23 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - Rejected if artefact is archived. *(AH 7)*
 - Non-owner cannot edit. *(AH 8)*
 
-### S4 — Owner views own artefact
+### S4 — Owner views own artefact — **done**
 - Owner can view their own `active` artefact at any visibility.
 - Archived gets 404 (reached only via dashboard restore). *(AH 7)*
+
+**Implementation notes (from building S4):**
+- **`loadOwnActiveArtefact(repo, { id, ownerId })`** (`src/server/artefacts/get-own-artefact.ts`):
+  owner-scoped load where missing / not-owned / archived all surface identically as
+  `ArtefactNotFound`, so neither a private artefact's existence nor its archived state leaks
+  (AH7/AH8). Shared by both view endpoints (and reusable by S3 edit).
+- BFF: **`GET /api/artefacts/:id`** (owner-only summary) and **`GET /api/artefacts/:id/raw`**
+  (trusted HTML, served as-is, by id at any visibility) — both `requireAuth`, both `404` on
+  not-found/archived. The by-id raw route is the in-app preview path: unlike `/a/:slug` (S6),
+  it works for a never-shared private artefact that has no slug.
+- **Client** (`App.svelte`): an `open` link per dashboard row → `/api/artefacts/:id/raw`.
+- **Tests:** `loadOwnActiveArtefact` unit (own/active, non-owner, unknown, archived → not
+  found) and end-to-end (owner detail + raw HTML for a private no-slug artefact, non-owner
+  `404`, archived `404`, unauth `401`).
 
 ### S5 — Share / unshare — **done**
 - Share raises visibility to `authenticated` or `public`; mints a unique slug on first

@@ -238,4 +238,83 @@ describe("create artefact (S2)", () => {
       expect((await setVisibility("public", otherCookie)).status).toBe(404);
     });
   });
+
+  // S4 — owner views own artefact by id (any visibility; archived hidden).
+  describe("owner view (S4)", () => {
+    let id: string;
+
+    beforeAll(async () => {
+      const res = await postArtefact({
+        title: "Viewable",
+        kind: "prototype",
+        html: "<h1>mine</h1>",
+      });
+      id = ((await res.json()) as ArtefactSummary).id;
+    });
+
+    it("returns the owner's own (private) artefact detail", async () => {
+      const res = await app.request(`/api/artefacts/${id}`, {
+        headers: { cookie },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ id, visibility: "private" });
+    });
+
+    it("serves the owner's artefact content as HTML at any visibility", async () => {
+      const res = await app.request(`/api/artefacts/${id}/raw`, {
+        headers: { cookie },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(await res.text()).toBe("<h1>mine</h1>");
+    });
+
+    it("hides the artefact from a non-owner with 404 (AH8)", async () => {
+      const other = await app.request("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "viewer-intruder@example.com",
+          password: "correct-horse-battery",
+          name: "VI",
+        }),
+      });
+      const otherCookie = other.headers.get("set-cookie")!.split(";")[0]!;
+      expect(
+        (await app.request(`/api/artefacts/${id}`, { headers: { cookie: otherCookie } }))
+          .status,
+      ).toBe(404);
+      expect(
+        (await app.request(`/api/artefacts/${id}/raw`, { headers: { cookie: otherCookie } }))
+          .status,
+      ).toBe(404);
+    });
+
+    it("rejects an unauthenticated request with 401", async () => {
+      expect((await app.request(`/api/artefacts/${id}`)).status).toBe(401);
+      expect((await app.request(`/api/artefacts/${id}/raw`)).status).toBe(401);
+    });
+
+    it("returns 404 for an archived artefact, even to its owner (AH7)", async () => {
+      const created = (await (
+        await postArtefact({ title: "To archive", kind: "form" })
+      ).json()) as ArtefactSummary;
+      const { db } = await import("../infra/db/client");
+      const { DrizzleArtefactRepository } = await import(
+        "../infra/db/artefact-repository.drizzle"
+      );
+      const repo = new DrizzleArtefactRepository(db);
+      const stored = (await repo.findById(created.id))!;
+      await repo.save({ ...stored, status: "archived", archivedAt: new Date() });
+
+      expect(
+        (await app.request(`/api/artefacts/${created.id}`, { headers: { cookie } }))
+          .status,
+      ).toBe(404);
+      expect(
+        (await app.request(`/api/artefacts/${created.id}/raw`, { headers: { cookie } }))
+          .status,
+      ).toBe(404);
+    });
+  });
 });
