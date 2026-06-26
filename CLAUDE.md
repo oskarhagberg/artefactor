@@ -2,24 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S3 + S7 done; building feature slices
+## Status: S11 done; building feature slices
 
-**All of the Artefact Hosting sharing/lifecycle slices are complete** — S0 (scaffold), S1
-(Identity), S2 (Create), S3 (Edit), S4 (Owner view), S5 (Share/unshare), S6 (Serve by slug),
-S7 (Archive/restore), S10 (Dashboard), S14 (Browse gallery). The monolith builds, runs,
-migrates, and tests green. Auth is wired (`src/server/auth.ts`): email + password via
-BetterAuth's Drizzle adapter, session middleware + `requireAuth` guard, and a protected
-`GET /api/me`. Artefact Hosting: a Drizzle `ArtefactRepository` (`save`/`findById`/
-`findBySlug`/`listByOwner`/`listShared`), the pure access matrix (`domain/artefact/access.ts`),
-application commands (create, edit, set-visibility, archive/restore) under
-`src/server/artefacts/`, shared port adapters (`src/server/adapters.ts`), and routes:
-`POST /api/artefacts` (upload), `GET /api/artefacts` (dashboard; `?archived=true` for the
-archived view), `GET|PATCH /api/artefacts/:id` (+`/:id/raw` owner render), `PUT
-/api/artefacts/:id/visibility` (share/unshare), `POST /api/artefacts/:id/archive|restore`,
-`GET /api/gallery` (browse shared), and `GET /a/:slug` (public render, access matrix). See
-`docs/specs/fdd/slice-dag.md` implementation notes. Next up is the **data branch: S11 →
-{S12, S13}** (the localStorage-hijack persistence) and **S8 → S9** (API keys + push).
-Development is **spec-driven**: locate the governing DDD invariant and FDD slice before
+**The whole Artefact Hosting context plus the first Artefact Data slice are complete** — S0
+(scaffold), S1 (Identity), S2 (Create), S3 (Edit), S4 (Owner view), S5 (Share/unshare), S6
+(Serve by slug), S7 (Archive/restore), S10 (Dashboard), S11 (own data blob), S14 (Browse
+gallery). The monolith builds, runs, migrates, and tests green. Auth is wired
+(`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session middleware
++ `requireAuth` guard, protected `GET /api/me`. Artefact Hosting: Drizzle `ArtefactRepository`
+(`save`/`findById`/`findBySlug`/`listByOwner`/`listShared`), the pure access matrix
+(`domain/artefact/access.ts`), commands (create/edit/set-visibility/archive/restore) under
+`src/server/artefacts/`, and routes `POST|GET /api/artefacts`, `GET|PATCH /api/artefacts/:id`
+(+`/:id/raw`), `PUT /api/artefacts/:id/visibility`, `POST /api/artefacts/:id/archive|restore`,
+`GET /api/gallery`, `GET /a/:slug`. Artefact Data (`src/domain/data/`, `src/server/data/`): the
+`DataEntry` aggregate (opaque ≤5 MB JSON blob, one per `(artefact, author)`), a Drizzle data
+repo, and `GET|PUT|DELETE /api/artefacts/:slug/data/me` (slug-addressed, access-matrix gated).
+Shared port adapters in `src/server/adapters.ts`. See `docs/specs/fdd/slice-dag.md`
+implementation notes. Next up is **S12** (host data-context switcher: `…/data/authors` +
+`…/data/:authorId`) and **S13** (localStorage-hijack runtime), plus **S8 → S9** (API keys +
+push). Development is **spec-driven**: locate the governing DDD invariant and FDD slice before
 coding, build test-first, and keep spec ↔ tests ↔ code in sync in the same change.
 
 ### Architecture at a glance

@@ -224,10 +224,36 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   hidden / opt-in) and an end-to-end dashboard test (fresh user → exact-count list, newest
   first, excludes archived + other owners, 401 unauth).
 
-### S11 — Store: read/write own data blob
+### S11 — Store: read/write own data blob — **done**
 - Authenticated viewer upserts their own JSON blob for an artefact (one per author). *(AD 1, 2, 3)*
 - `GET …/data/me` returns the caller's blob; rejects oversize/invalid JSON. *(AD 8)*
 - Unauthenticated write rejected; archived artefact → 404. *(AD 3, 6)*
+
+**Implementation notes (from building S11):**
+- **New bounded context** `src/domain/data/`: the `DataEntry` aggregate (opaque `blob` text,
+  `MAX_BLOB_BYTES = 5 MB`), `assertBlobWithinBounds` (size-then-`JSON.parse`, AD8),
+  `upsertDataEntry` (one per `(artefact, author)`, preserves id/createdAt, bumps updatedAt),
+  the `DataRepository` port + in-memory double, and `InvalidBlob`/`BlobTooLarge` errors.
+- **Drizzle adapter** (`infra/db/data-repository.drizzle.ts`) upserts on the
+  `(artefact_id, author_id)` unique pair; the `data_entry` table already existed from S0.
+- **Addressing:** the data API is keyed by the artefact **slug** (the served-artefact handle,
+  per the AD endpoint table). Access is resolved through the **Artefact access matrix** —
+  `canViewArtefact` reused — so a viewer can only touch data on an artefact they can see;
+  archived / not-viewable / unknown slug all collapse to `404` (AD4, AD6). *(Consequence: a
+  never-shared private artefact has no slug and so no data API surface yet — it gains one as
+  soon as it is shared once, since the slug is then retained. Revisit if owner-preview data
+  on unshared artefacts is needed — likely an id-addressed alias in S13.)*
+- **Commands** (`src/server/data/own-data.command.ts`): `get` / `put` / `delete` own entry,
+  all gated by the slug+access resolver. `authorId` is always the authenticated caller (AD2,
+  AD3) — there is no anonymous write.
+- **BFF** (`routes/data.ts`, mounted at `/api/artefacts/:slug/data`): `GET /me` (200 with
+  `blob: null` when none), `PUT /me` (raw JSON body, `InvalidBlob → 400`, `BlobTooLarge →
+  413`), `DELETE /me` (204). All `requireAuth`; `ArtefactNotFound → 404`.
+- **Tests:** domain unit (blob bounds, upsert), command unit (per-author isolation, access/
+  archived gating, delete), and an end-to-end `data.test.ts` (upsert/read, `blob:null`,
+  per-author separation, `400`/`401`/`413`, archived `404`, private non-owner `404`, delete).
+- The author-listing + per-author endpoints (S12) and the localStorage runtime shim (S13)
+  build on this; no client UI yet (S11 is the API surface they consume).
 
 ### S12 — Host UI: data-context switcher
 - A signed-in viewer with read access can list authors who have data and load another

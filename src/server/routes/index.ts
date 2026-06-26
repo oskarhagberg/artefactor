@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "../auth";
 import { env } from "../env";
-import { artefactRepository, payloadStore } from "../adapters";
+import { artefactRepository, dataRepository, payloadStore } from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
+import { createDataRoutes } from "./data";
 import type {
   ArtefactListResponse,
   MeResponse,
@@ -65,6 +66,13 @@ export function createApiRoutes() {
       repo: artefactRepository,
       payloadStore,
     }),
+  );
+
+  // S11 — Artefact Data: the caller's own blob, addressed by the artefact slug.
+  // Mounted with the `:slug` param so the data handlers resolve the artefact.
+  api.route(
+    "/artefacts/:slug/data",
+    createDataRoutes({ artefactRepo: artefactRepository, dataRepo: dataRepository }),
   );
 
   return api;
