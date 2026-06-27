@@ -291,9 +291,13 @@
     }
   }
 
-  function doSignOut() {
+  async function doSignOut() {
     overlay.close();
-    signOut();
+    // signOut() clears the session cookie server-side but does not reset the
+    // useSession store, so the UI wouldn't switch back to the sign-in screen.
+    // A full reload re-resolves the (now absent) session and clears all state.
+    await signOut();
+    window.location.href = "/";
   }
 
   // control-row styles
