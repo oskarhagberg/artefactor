@@ -1,35 +1,90 @@
 @import "tailwindcss";
 
-/* Minimal shadcn-svelte style design tokens (zinc base). The shadcn CLI would
-   expand these; one demo Button is enough to prove Tailwind + tokens render. */
+/* ------------------------------------------------------------------ *
+ * Artefactor design tokens (imported from the claude.ai/design source
+ * Artefactor.dc.html). The product UI is built directly against these
+ * CSS variables with inline styles for pixel fidelity with the design;
+ * Tailwind remains available for incidental layout.
+ * ------------------------------------------------------------------ */
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(240 4.8% 95.9%);
-  --secondary-foreground: hsl(240 5.9% 10%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 5.9% 10%);
+  --bg: #ffffff;
+  --fg: #09090b;
+  --card: #ffffff;
+  --muted: #f4f4f5;
+  --muted-fg: #71717a;
+  --subtle: #fafafa;
+  --border: #e9e9ec;
+  --border-strong: #d4d4d8;
+  --primary: #0f766e;
+  --primary-fg: #ffffff;
+  --accent-soft: rgba(15, 118, 110, 0.1);
+  --destructive: #dc2626;
+  --destructive-soft: rgba(220, 38, 38, 0.09);
+  --shadow: 0 1px 2px rgba(16, 17, 18, 0.05);
+  --shadow-md: 0 6px 20px rgba(16, 17, 18, 0.1);
+  --shadow-lg: 0 16px 50px rgba(16, 17, 18, 0.18);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Geist", -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+input::placeholder {
+  color: var(--muted-fg);
+}
+
+@keyframes af-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes af-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes af-toast {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+@keyframes af-menu {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

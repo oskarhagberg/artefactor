@@ -88,6 +88,8 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
       return c.html(
         renderHostShell({
           title: artefact.title,
+          kind: artefact.kind,
+          updatedAt: artefact.updatedAt.toISOString(),
           framePath: `/api/artefacts/${encodeURIComponent(artefact.id)}/raw/frame`,
           authorsEndpoint: `/api/artefacts/${encodeURIComponent(artefact.id)}/data/authors`,
           viewerId: ownerId(c),

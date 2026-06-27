@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Hono } from "hono";
-import type { ArtefactSummary } from "../shared/contracts";
+import type {
+  ArtefactSummary,
+  SharedArtefactSummary,
+} from "../shared/contracts";
 
 // End-to-end S14: the signed-in "Shared with you" view. Two owners publish
 // artefacts at various tiers; a signed-in viewer sees others' shared artefacts
@@ -71,7 +74,9 @@ describe("shared with you (S14)", () => {
   it("lists others' shared artefacts, excluding the viewer's own and others' private", async () => {
     const res = await shared(bob);
     expect(res.status).toBe(200);
-    const { artefacts } = (await res.json()) as { artefacts: ArtefactSummary[] };
+    const { artefacts } = (await res.json()) as {
+      artefacts: SharedArtefactSummary[];
+    };
     const titles = artefacts.map((a) => a.title).sort();
     // Bob sees Alice's shared artefacts, but NOT his own "Bob public" (that is
     // in his "Your artefacts") and NOT Alice's private one.
@@ -86,6 +91,22 @@ describe("shared with you (S14)", () => {
           a.status === "active" &&
           a.visibility !== "private" &&
           a.publicSlug !== null,
+      ),
+    ).toBe(true);
+  });
+
+  it("attributes each shared artefact to its owner's display identity", async () => {
+    const res = await shared(bob);
+    const { artefacts } = (await res.json()) as {
+      artefacts: SharedArtefactSummary[];
+    };
+    // Both visible artefacts are Alice's; sign-up set name === email for her.
+    expect(artefacts.length).toBe(2);
+    expect(
+      artefacts.every(
+        (a) =>
+          a.owner.name === "alice-s14@example.com" &&
+          a.owner.email === "alice-s14@example.com",
       ),
     ).toBe(true);
   });

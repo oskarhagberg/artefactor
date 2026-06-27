@@ -12,16 +12,26 @@
 // shareable link and also serves unauthenticated/public viewers, who never load
 // the SPA. The picker is populated client-side from `…/data/authors`, which is
 // itself access-matrix gated (AD4).
+//
+// The toolbar shows the same icon / title / kind as the SPA list view (shared
+// `kind-presentation`), plus — for signed-in viewers only — a back button to the
+// admin UI. Anonymous (public-link) viewers have no admin UI, so it's hidden.
+
+import type { ArtefactKind } from "../../domain/artefact/kind";
+import { kindPresentation } from "../../shared/kind-presentation";
 
 export interface HostShellContext {
   title: string;
+  kind: ArtefactKind;
+  // ISO-8601 timestamp; rendered as a relative "Updated …" label.
+  updatedAt: string;
   // Where the <iframe> loads the artefact from. The switcher appends
   // `?author=<id>` to re-seed another author's context.
   framePath: string;
   // The `…/data/authors` endpoint that populates the picker.
   authorsEndpoint: string;
-  // The signed-in viewer, or null. Used to label "your data" and to know which
-  // listed author is the viewer themselves (folded into the default context).
+  // The signed-in viewer, or null. Used to label "your data", to know which
+  // listed author is the viewer, and to show the back-to-admin button.
   viewerId: string | null;
   // The artefact owner, so the picker can tag the owner's entry.
   ownerId: string;
@@ -38,20 +48,50 @@ export function renderHostShell(ctx: HostShellContext): string {
   // Escape `<` so a title containing "</script>" cannot break out of the tag.
   const cfgJson = JSON.stringify(cfg).replace(/</g, "\\u003c");
 
+  const meta = kindPresentation(ctx.kind);
+  const kindIcon = meta.icon
+    .map((d) => `<path d="${d}"></path>`)
+    .join("");
+  const updatedLabel = relativeTime(ctx.updatedAt);
+  const subLabel = updatedLabel
+    ? `${meta.label} · Updated ${updatedLabel}`
+    : meta.label;
+
+  // Signed-in viewers can return to the admin UI (the SPA at "/"); anonymous
+  // public-link viewers cannot, so the button is omitted entirely.
+  const backButton = ctx.viewerId
+    ? `<a class="ae-back" href="/" title="Back to your artefacts" aria-label="Back to your artefacts">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+      </a>`
+    : "";
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(ctx.title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --fg: #09090b; --muted-fg: #71717a; --border: #e9e9ec; --card: #fff;
+    --muted: #f4f4f5; --shadow: 0 1px 2px rgba(16,17,18,0.05);
+  }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  body { display: flex; flex-direction: column; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2328; background: #fff; }
-  .ae-bar { flex: 0 0 auto; display: flex; align-items: center; gap: .75rem; padding: .5rem .75rem; border-bottom: 1px solid #e2e4e8; background: #f6f7f9; }
-  .ae-bar .ae-title { font-weight: 600; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ae-bar label { color: #57606a; }
-  .ae-bar select { font: inherit; padding: .25rem .5rem; border: 1px solid #ccd0d5; border-radius: 6px; background: #fff; max-width: 50vw; }
+  body { display: flex; flex-direction: column; font: 14px/1.4 "Geist", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: #fff; -webkit-font-smoothing: antialiased; }
+  .ae-bar { flex: 0 0 auto; display: flex; align-items: center; gap: .7rem; padding: .5rem .75rem; border-bottom: 1px solid var(--border); background: var(--card); }
+  .ae-back { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg); text-decoration: none; box-shadow: var(--shadow); }
+  .ae-back:hover { background: var(--muted); }
+  .ae-id { display: flex; align-items: center; gap: .6rem; min-width: 0; margin-right: auto; }
+  .ae-tile { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 9px; background: ${meta.tint}; }
+  .ae-text { min-width: 0; }
+  .ae-title { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ae-sub { font-size: 12px; color: var(--muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ae-bar label { color: var(--muted-fg); font-size: 13px; }
+  .ae-bar select { font: inherit; font-size: 13px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); max-width: 40vw; color: var(--fg); }
   .ae-ro { display: none; font-size: 12px; font-weight: 600; color: #9a6700; background: #fff8c5; border: 1px solid #eac54f; border-radius: 999px; padding: .1rem .5rem; }
   .ae-ro.show { display: inline; }
   .ae-frame { flex: 1 1 auto; width: 100%; border: 0; }
@@ -59,7 +99,16 @@ export function renderHostShell(ctx: HostShellContext): string {
 </head>
 <body>
   <div class="ae-bar">
-    <span class="ae-title"></span>
+    ${backButton}
+    <div class="ae-id">
+      <div class="ae-tile">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${meta.color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${kindIcon}</svg>
+      </div>
+      <div class="ae-text">
+        <div class="ae-title">${escapeHtml(ctx.title)}</div>
+        <div class="ae-sub">${escapeHtml(subLabel)}</div>
+      </div>
+    </div>
     <label for="ae-ctx">Data context</label>
     <select id="ae-ctx" aria-label="Data context"></select>
     <span class="ae-ro" id="ae-ro">read-only</span>
@@ -68,11 +117,9 @@ export function renderHostShell(ctx: HostShellContext): string {
 <script>
 (function(){
   var cfg = ${cfgJson};
-  var titleEl = document.querySelector(".ae-title");
   var sel = document.getElementById("ae-ctx");
   var ro = document.getElementById("ae-ro");
   var frame = document.getElementById("ae-frame");
-  titleEl.textContent = cfg.title;
 
   function seed(authorId){
     frame.src = authorId ? cfg.frameSrc + "?author=" + encodeURIComponent(authorId) : cfg.frameSrc;
@@ -128,6 +175,26 @@ export function renderHostShell(ctx: HostShellContext): string {
 </script>
 </body>
 </html>`;
+}
+
+// Relative "Updated …" label for the toolbar, computed at render time.
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 45) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 5) return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+  const years = Math.round(days / 365);
+  return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
 function escapeHtml(s: string): string {

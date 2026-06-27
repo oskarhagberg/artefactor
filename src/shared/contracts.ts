@@ -38,6 +38,19 @@ export interface ArtefactListResponse {
   artefacts: ArtefactSummary[];
 }
 
+// S14 — "Shared with you". A shared artefact as seen by a recipient, enriched
+// (BFF-side) with the owner's display identity so the gallery can attribute it
+// ("Shared by …") and show avatar initials. The owner ids come from Artefact
+// Hosting; the names/emails are composed from the Identity context via the BFF
+// user directory (the same lookup that labels the S12 data-context switcher).
+export interface SharedArtefactSummary extends ArtefactSummary {
+  owner: { name: string; email: string };
+}
+
+export interface SharedListResponse {
+  artefacts: SharedArtefactSummary[];
+}
+
 // S5 — Share / unshare. Set an artefact's visibility tier. `private` unshares
 // (retaining the slug); `authenticated`/`public` share (minting the slug on the
 // first share, reusing it thereafter).

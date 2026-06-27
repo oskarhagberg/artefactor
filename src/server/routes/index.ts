@@ -11,10 +11,7 @@ import {
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
-import type {
-  ArtefactListResponse,
-  MeResponse,
-} from "../../shared/contracts";
+import type { MeResponse, SharedListResponse } from "../../shared/contracts";
 
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
 export function createApiRoutes() {
@@ -60,8 +57,20 @@ export function createApiRoutes() {
   // client groups/filters by kind.
   api.get("/shared", requireAuth, async (c) => {
     const artefacts = await artefactRepository.listShared(c.get("user")!.id);
-    return c.json<ArtefactListResponse>({
-      artefacts: artefacts.map(toArtefactSummary),
+    // Enrich with owner display identity so the gallery can attribute each
+    // artefact ("Shared by …"). The artefact ids/owner ids come from Hosting;
+    // names/emails are composed from Identity via the user directory.
+    const identities = await userDirectory.lookup(
+      artefacts.map((a) => a.ownerId),
+    );
+    return c.json<SharedListResponse>({
+      artefacts: artefacts.map((a) => {
+        const who = identities.get(a.ownerId);
+        return {
+          ...toArtefactSummary(a),
+          owner: { name: who?.name ?? "", email: who?.email ?? "" },
+        };
+      }),
     });
   });
 

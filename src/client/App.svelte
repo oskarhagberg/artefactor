@@ -1,503 +1,546 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { signIn, signUp, signOut, useSession } from "$lib/auth";
-  import { ARTEFACT_KINDS } from "../domain/artefact/kind";
-  import type { ArtefactSummary, MeResponse } from "../shared/contracts";
+  import { signOut, useSession } from "$lib/auth";
+  import type {
+    ArtefactSummary,
+    SharedArtefactSummary,
+  } from "../shared/contracts";
+  import type { ArtefactKind } from "../domain/artefact/kind";
+  import {
+    KINDS,
+    KIND_ORDER,
+    VIS,
+    kindMeta,
+    type Visibility,
+  } from "$lib/format";
+  import { api, ApiError, shareUrl, ownOpenUrl } from "$lib/api";
+  import { overlay } from "$lib/ui.svelte";
+  import { toast, TOAST_ICONS } from "$lib/toast.svelte";
+  import Icon from "$lib/components/Icon.svelte";
+  import TopBar from "$lib/components/TopBar.svelte";
+  import ArtefactCard from "$lib/components/ArtefactCard.svelte";
+  import ArtefactRow from "$lib/components/ArtefactRow.svelte";
+  import GalleryCard from "$lib/components/GalleryCard.svelte";
+  import GalleryRow from "$lib/components/GalleryRow.svelte";
+  import UploadModal from "$lib/components/UploadModal.svelte";
+  import Toast from "$lib/components/Toast.svelte";
+  import AuthScreen from "$lib/components/AuthScreen.svelte";
+
+  const SORTS = ["updated", "title", "size"] as const;
 
   const session = useSession();
 
-  // Auth form state.
-  let mode = $state<"sign-in" | "sign-up">("sign-in");
-  let name = $state("");
-  let email = $state("");
-  let password = $state("");
-  let error = $state<string | null>(null);
-  let busy = $state(false);
+  // ---- view / control state ----
+  let view = $state<"dashboard" | "gallery">("dashboard");
+  let density = $state<"grid" | "list">("grid");
+  let kindFilter = $state<"all" | ArtefactKind>("all");
+  let sort = $state<"updated" | "title" | "size">("updated");
+  let query = $state("");
+  let archivedOpen = $state(true);
 
-  // Result of calling the protected BFF endpoint, to prove the session reaches
-  // the API as a stable ownerId.
-  let me = $state<MeResponse | null>(null);
-  let meError = $state<string | null>(null);
+  // ---- data ----
+  let owned = $state<ArtefactSummary[]>([]);
+  let archived = $state<ArtefactSummary[]>([]);
+  let shared = $state<SharedArtefactSummary[]>([]);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
-    error = null;
-    busy = true;
-    const res =
-      mode === "sign-up"
-        ? await signUp.email({ name, email, password })
-        : await signIn.email({ email, password });
-    busy = false;
-    if (res.error) {
-      error = res.error.message ?? "Authentication failed";
-    } else {
-      password = "";
+  // ---- upload / edit modal ----
+  let uploadOpen = $state(false);
+  let editing = $state<ArtefactSummary | null>(null);
+  let uploadBusy = $state(false);
+  let uploadError = $state<string | null>(null);
+
+  const user = $derived(
+    $session.data
+      ? { name: $session.data.user.name, email: $session.data.user.email }
+      : { name: "", email: "" },
+  );
+
+  // ---- loading ----
+  async function loadOwned() {
+    try {
+      owned = await api.listOwn();
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 401)
+        toast.show("Could not load your artefacts", TOAST_ICONS.alert);
+    }
+  }
+  async function loadArchived() {
+    try {
+      archived = await api.listArchived();
+    } catch {
+      /* non-fatal */
+    }
+  }
+  async function loadShared() {
+    try {
+      shared = await api.listShared();
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 401)
+        toast.show("Could not load shared artefacts", TOAST_ICONS.alert);
     }
   }
 
-  async function callMe() {
-    meError = null;
-    me = null;
-    const res = await fetch("/api/me");
-    if (res.ok) {
-      me = await res.json();
-    } else {
-      meError = `${res.status} ${res.statusText}`;
+  $effect(() => {
+    if ($session.data) {
+      loadOwned();
+      loadArchived();
+      loadShared();
     }
+  });
+
+  // ---- derived lists ----
+  function matchesQuery(title: string): boolean {
+    const q = query.trim().toLowerCase();
+    return !q || title.toLowerCase().includes(q);
+  }
+  function sortList<T extends ArtefactSummary>(list: T[]): T[] {
+    const a = [...list];
+    if (sort === "title") a.sort((x, y) => x.title.localeCompare(y.title));
+    else if (sort === "size") a.sort((x, y) => y.payloadBytes - x.payloadBytes);
+    else
+      a.sort(
+        (x, y) =>
+          new Date(y.updatedAt).getTime() - new Date(x.updatedAt).getTime(),
+      );
+    return a;
   }
 
-  // S2 — create artefact (manual HTML upload).
-  let aTitle = $state("");
-  let aKind = $state<string>(ARTEFACT_KINDS[0]);
-  let aFiles = $state<FileList | null>(null);
-  let aBusy = $state(false);
-  let aError = $state<string | null>(null);
-  let created = $state<ArtefactSummary | null>(null);
+  const isDash = $derived(view === "dashboard");
+  const baseList = $derived(isDash ? owned : shared);
 
-  async function createArtefact(e: SubmitEvent) {
-    e.preventDefault();
-    aError = null;
-    created = null;
-    const file = aFiles?.[0];
-    if (!file) {
-      aError = "Choose an HTML file to upload";
-      return;
+  const visibleOwned = $derived(
+    sortList(
+      owned
+        .filter((a) => kindFilter === "all" || a.kind === kindFilter)
+        .filter((a) => matchesQuery(a.title)),
+    ),
+  );
+  const visibleShared = $derived(
+    sortList(
+      shared
+        .filter((g) => kindFilter === "all" || g.kind === kindFilter)
+        .filter((g) => matchesQuery(g.title)),
+    ),
+  );
+
+  // Kind chips with counts, from the active view's base list.
+  const kindChips = $derived.by(() => {
+    const counts: Record<string, number> = { all: baseList.length };
+    for (const k of KIND_ORDER)
+      counts[k] = baseList.filter((x) => x.kind === k).length;
+    const chips: { key: "all" | ArtefactKind; label: string; count: number }[] = [
+      { key: "all", label: "All", count: counts.all ?? 0 },
+    ];
+    for (const k of KIND_ORDER) {
+      const n = counts[k] ?? 0;
+      if (n > 0) chips.push({ key: k, label: KINDS[k].label, count: n });
     }
-    const form = new FormData();
-    form.set("title", aTitle);
-    form.set("kind", aKind);
-    form.set("payload", file);
+    return chips;
+  });
 
-    aBusy = true;
-    const res = await fetch("/api/artefacts", { method: "POST", body: form });
-    aBusy = false;
-    if (res.ok) {
-      created = await res.json();
-      aTitle = "";
-      aFiles = null;
-      loadArtefacts();
-    } else {
-      const body = await res.json().catch(() => ({}));
-      aError = body.error ?? `${res.status} ${res.statusText}`;
-    }
-  }
+  const showEmpty = $derived(
+    isDash ? visibleOwned.length === 0 : visibleShared.length === 0,
+  );
+  const isFiltered = $derived(query.trim() !== "" || kindFilter !== "all");
+  const empty = $derived.by(() => {
+    if (isFiltered)
+      return {
+        title: "No matches",
+        sub: "No artefacts match your current filter or search. Try clearing them.",
+        cta: false,
+      };
+    if (isDash)
+      return {
+        title: "No artefacts yet",
+        sub: "Upload an HTML deliverable from Claude — a prototype, deck, form or doc — and it lives here.",
+        cta: true,
+      };
+    return {
+      title: "Nothing shared with you",
+      sub: "When teammates share artefacts with members or the public, they’ll show up here.",
+      cta: false,
+    };
+  });
 
-  // "Your artefacts" — list the signed-in owner's own artefacts.
-  const VISIBILITY_LABEL: Record<ArtefactSummary["visibility"], string> = {
-    private: "Private",
-    authenticated: "Other users",
-    public: "Public",
+  const sortLabels: Record<typeof sort, string> = {
+    updated: "Recently updated",
+    title: "Title A–Z",
+    size: "Largest first",
   };
 
-  let artefacts = $state<ArtefactSummary[]>([]);
-  let listError = $state<string | null>(null);
-  let filterKind = $state<string>("all");
+  // ---- navigation ----
+  function goDashboard() {
+    view = "dashboard";
+    kindFilter = "all";
+    query = "";
+    overlay.close();
+  }
+  function goGallery() {
+    view = "gallery";
+    kindFilter = "all";
+    query = "";
+    overlay.close();
+  }
 
-  async function loadArtefacts() {
-    listError = null;
-    const res = await fetch("/api/artefacts");
-    if (res.ok) {
-      artefacts = ((await res.json()) as { artefacts: ArtefactSummary[] })
-        .artefacts;
-    } else if (res.status !== 401) {
-      listError = `${res.status} ${res.statusText}`;
+  // ---- actions ----
+  function openItem(a: ArtefactSummary) {
+    overlay.close();
+    window.open(ownOpenUrl(a), "_blank", "noopener");
+  }
+  function openShared(g: SharedArtefactSummary) {
+    window.open(`/a/${g.publicSlug}`, "_blank", "noopener");
+  }
+  async function copyLink(a: ArtefactSummary) {
+    const url = shareUrl(a);
+    if (url) {
+      try {
+        await navigator.clipboard?.writeText(url);
+      } catch {
+        /* clipboard may be unavailable */
+      }
+      toast.show(`Link copied · ${url.replace(/^https?:\/\//, "")}`, TOAST_ICONS.check);
+    }
+  }
+  async function changeVisibility(a: ArtefactSummary, v: Visibility) {
+    try {
+      await api.setVisibility(a.id, v);
+      await Promise.all([loadOwned(), loadShared()]);
+      toast.show(`Visibility set to ${VIS[v].label}`, VIS[v].icon);
+    } catch (e) {
+      toast.show(
+        e instanceof ApiError ? e.message : "Could not update visibility",
+        TOAST_ICONS.alert,
+      );
+    }
+  }
+  async function archiveItem(a: ArtefactSummary) {
+    try {
+      await api.archive(a.id);
+      await Promise.all([loadOwned(), loadShared(), loadArchived()]);
+      toast.show(
+        `“${a.title}” archived`,
+        TOAST_ICONS.archive,
+        () => restoreItem(a.id),
+        "Undo",
+      );
+    } catch (e) {
+      toast.show(
+        e instanceof ApiError ? e.message : "Could not archive",
+        TOAST_ICONS.alert,
+      );
+    }
+  }
+  async function restoreItem(id: string) {
+    try {
+      await api.restore(id);
+      await Promise.all([loadOwned(), loadShared(), loadArchived()]);
+      toast.show("Restored", TOAST_ICONS.restore);
+    } catch (e) {
+      toast.show(
+        e instanceof ApiError ? e.message : "Could not restore",
+        TOAST_ICONS.alert,
+      );
     }
   }
 
-  // Load (and reload) whenever a session is present.
-  $effect(() => {
-    if ($session.data) loadArtefacts();
-  });
-
-  // Group the (kind-filtered) artefacts by kind for display.
-  const grouped = $derived.by(() => {
-    const groups = new Map<string, ArtefactSummary[]>();
-    for (const a of artefacts) {
-      if (filterKind !== "all" && a.kind !== filterKind) continue;
-      (groups.get(a.kind) ?? groups.set(a.kind, []).get(a.kind)!).push(a);
-    }
-    return [...groups.entries()];
-  });
-
-  function shareUrl(a: ArtefactSummary): string | null {
-    if (!a.publicSlug) return null;
-    return `${location.origin}/a/${a.publicSlug}`;
+  // ---- upload / edit ----
+  function openUpload() {
+    editing = null;
+    uploadError = null;
+    uploadOpen = true;
+    overlay.close();
   }
-
-  async function changeVisibility(a: ArtefactSummary, visibility: string) {
-    listError = null;
-    const res = await fetch(`/api/artefacts/${a.id}/visibility`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visibility }),
-    });
-    if (res.ok) {
-      loadArtefacts();
-      loadShared();
-    } else {
-      listError = `Could not update visibility (${res.status})`;
-    }
+  function openEdit(a: ArtefactSummary) {
+    editing = a;
+    uploadError = null;
+    uploadOpen = true;
+    overlay.close();
   }
-
-  // S3 — edit an artefact (title / kind / optional replacement payload).
-  let editingId = $state<string | null>(null);
-  let editTitle = $state("");
-  let editKind = $state<string>(ARTEFACT_KINDS[0]);
-  let editFiles = $state<FileList | null>(null);
-
-  function startEdit(a: ArtefactSummary) {
-    editingId = a.id;
-    editTitle = a.title;
-    editKind = a.kind;
-    editFiles = null;
+  function closeUpload() {
+    uploadOpen = false;
+    editing = null;
   }
-
-  async function saveEdit(a: ArtefactSummary) {
-    listError = null;
-    const form = new FormData();
-    form.set("title", editTitle);
-    form.set("kind", editKind);
-    const file = editFiles?.[0];
-    if (file) form.set("payload", file);
-    const res = await fetch(`/api/artefacts/${a.id}`, {
-      method: "PATCH",
-      body: form,
-    });
-    if (res.ok) {
-      editingId = null;
-      loadArtefacts();
-      loadShared();
-    } else {
-      const body = await res.json().catch(() => ({}));
-      listError = body.error ?? `Could not save (${res.status})`;
+  async function submitUpload(input: {
+    title: string;
+    kind: ArtefactKind;
+    file: File | null;
+  }) {
+    uploadBusy = true;
+    uploadError = null;
+    try {
+      if (editing) {
+        await api.update(editing.id, input);
+        toast.show("Changes saved", TOAST_ICONS.check);
+      } else {
+        const created = await api.create({
+          title: input.title,
+          kind: input.kind,
+          file: input.file!,
+        });
+        toast.show(`“${created.title}” uploaded`, TOAST_ICONS.check);
+        view = "dashboard";
+        kindFilter = "all";
+        query = "";
+      }
+      uploadOpen = false;
+      editing = null;
+      await Promise.all([loadOwned(), loadShared(), loadArchived()]);
+    } catch (e) {
+      uploadError = e instanceof ApiError ? e.message : "Something went wrong";
+    } finally {
+      uploadBusy = false;
     }
   }
 
-  // S7 — archive / restore.
-  let archived = $state<ArtefactSummary[]>([]);
-
-  async function loadArchived() {
-    const res = await fetch("/api/artefacts?archived=true");
-    if (res.ok) {
-      archived = ((await res.json()) as { artefacts: ArtefactSummary[] })
-        .artefacts;
-    }
+  function doSignOut() {
+    overlay.close();
+    signOut();
   }
 
-  $effect(() => {
-    if ($session.data) loadArchived();
-  });
-
-  async function archive(a: ArtefactSummary) {
-    listError = null;
-    const res = await fetch(`/api/artefacts/${a.id}/archive`, { method: "POST" });
-    if (res.ok) {
-      loadArtefacts();
-      loadShared();
-      loadArchived();
-    } else {
-      listError = `Could not archive (${res.status})`;
-    }
-  }
-
-  async function restore(a: ArtefactSummary) {
-    listError = null;
-    const res = await fetch(`/api/artefacts/${a.id}/restore`, { method: "POST" });
-    if (res.ok) {
-      loadArtefacts();
-      loadShared();
-      loadArchived();
-    } else {
-      listError = `Could not restore (${res.status})`;
-    }
-  }
-
-  // "Shared with you" — active artefacts shared to the signed-in user by others.
-  let sharedWithYou = $state<ArtefactSummary[]>([]);
-  let sharedError = $state<string | null>(null);
-
-  async function loadShared() {
-    sharedError = null;
-    const res = await fetch("/api/shared");
-    if (res.ok) {
-      sharedWithYou = ((await res.json()) as { artefacts: ArtefactSummary[] })
-        .artefacts;
-    } else if (res.status !== 401) {
-      sharedError = `${res.status} ${res.statusText}`;
-    }
-  }
-
-  $effect(() => {
-    if ($session.data) loadShared();
-  });
-
-  const sharedGrouped = $derived.by(() => {
-    const groups = new Map<string, ArtefactSummary[]>();
-    for (const a of sharedWithYou) {
-      (groups.get(a.kind) ?? groups.set(a.kind, []).get(a.kind)!).push(a);
-    }
-    return [...groups.entries()];
-  });
+  // control-row styles
+  const segActive =
+    "width:30px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:7px;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:var(--shadow);";
+  const segIdle =
+    "width:30px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:7px;cursor:pointer;background:none;color:var(--muted-fg);";
 </script>
 
-<main class="mx-auto max-w-md space-y-6 p-8">
-  <h1 class="text-2xl font-semibold">Artefactor</h1>
+{#if $session.isPending}
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;color:var(--muted-fg);font-size:13px;">
+    Loading…
+  </div>
+{:else if !$session.data}
+  <AuthScreen />
+{:else}
+  <div style="display:flex;min-height:100vh;background:var(--bg);color:var(--fg);">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+      <TopBar
+        {view}
+        {query}
+        searchPlaceholder={isDash ? "Search your artefacts…" : "Search shared artefacts…"}
+        {user}
+        onSearch={(q) => (query = q)}
+        onGoDashboard={goDashboard}
+        onGoGallery={goGallery}
+        onOpenUpload={openUpload}
+        onSignOut={doSignOut}
+      />
 
-  {#if $session.isPending}
-    <p class="text-sm">Loading session…</p>
-  {:else if $session.data}
-    <section class="space-y-3">
-      <p class="text-sm">
-        Signed in as <strong>{$session.data.user.email}</strong>
-      </p>
-      <div class="flex gap-2">
-        <Button onclick={callMe}>Call protected /api/me</Button>
-        <Button onclick={() => signOut()}>Sign out</Button>
-      </div>
-      {#if me}
-        <pre class="rounded bg-zinc-100 p-3 text-xs">{JSON.stringify(
-            me,
-            null,
-            2,
-          )}</pre>
-      {:else if meError}
-        <p class="text-sm text-red-600">/api/me failed: {meError}</p>
-      {/if}
-    </section>
-
-    <section class="space-y-3 border-t pt-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium">Your artefacts</h2>
-        <select
-          class="rounded border px-2 py-1 text-sm"
-          bind:value={filterKind}
-        >
-          <option value="all">All kinds</option>
-          {#each ARTEFACT_KINDS as kind (kind)}
-            <option value={kind}>{kind}</option>
-          {/each}
-        </select>
-      </div>
-
-      {#if listError}
-        <p class="text-sm text-red-600">Could not load artefacts: {listError}</p>
-      {:else if grouped.length === 0}
-        <p class="text-sm text-zinc-500">No artefacts yet.</p>
-      {:else}
-        {#each grouped as [kind, items] (kind)}
-          <div class="space-y-1">
-            <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
-            <ul class="divide-y rounded border">
-              {#each items as a (a.id)}
-                <li class="space-y-2 px-3 py-2">
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="truncate text-sm">{a.title}</span>
-                    <span class="flex shrink-0 items-center gap-2 text-xs">
-                      <a
-                        class="text-blue-600 underline"
-                        href={`/api/artefacts/${a.id}/raw`}
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        open
-                      </a>
-                      <select
-                        class="rounded border px-1 py-0.5 text-xs"
-                        value={a.visibility}
-                        onchange={(e) =>
-                          changeVisibility(a, e.currentTarget.value)}
-                      >
-                        {#each Object.entries(VISIBILITY_LABEL) as [value, label] (value)}
-                          <option {value}>{label}</option>
-                        {/each}
-                      </select>
-                      {#if shareUrl(a)}
-                        <a class="text-blue-600 underline" href={shareUrl(a)}>
-                          link
-                        </a>
+      <main style="flex:1;padding:26px 24px 64px;max-width:1280px;width:100%;margin:0 auto;">
+        <!-- View header -->
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;">
+          <div>
+            <h1 style="margin:0;font-size:21px;font-weight:600;letter-spacing:-0.02em;">
+              {isDash ? "Your artefacts" : "Shared with you"}
+            </h1>
+            <p style="margin:5px 0 0;font-size:13.5px;color:var(--muted-fg);">
+              {isDash
+                ? "Manage, share and organise the artefacts you own."
+                : "Artefacts teammates have shared with you — open to view."}
+            </p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <!-- Sort -->
+            <div style="position:relative;">
+              <button
+                onclick={() => overlay.toggle("sort")}
+                style="display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:9px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;"
+              >
+                <Icon paths={["M3 6h12M3 12h9M3 18h6M17 8l4-4 4 4M21 4v16"]} size={14} />
+                {sortLabels[sort]}
+                <Icon paths={["M6 9l6 6 6-6"]} size={13} style="color:var(--muted-fg);" />
+              </button>
+              {#if overlay.isOpen("sort")}
+                <div style="position:absolute;right:0;top:40px;z-index:40;min-width:172px;background:var(--card);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-md);padding:5px;animation:af-menu .12s ease;">
+                  {#each SORTS as opt (opt)}
+                    {@const active = sort === opt}
+                    <button
+                      onclick={() => {
+                        sort = opt;
+                        overlay.close();
+                      }}
+                      style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border:none;background:none;color:var(--fg);font-size:13px;font-family:inherit;border-radius:7px;cursor:pointer;text-align:left;{active
+                        ? 'font-weight:600;'
+                        : ''}"
+                    >
+                      <span>{sortLabels[opt]}</span>
+                      {#if active}
+                        <Icon paths={["M20 6L9 17l-5-5"]} size={15} width={2.4} color="var(--primary)" />
                       {/if}
-                      <button
-                        type="button"
-                        class="text-zinc-600 underline"
-                        onclick={() => startEdit(a)}>edit</button
-                      >
-                      <button
-                        type="button"
-                        class="text-red-600 underline"
-                        onclick={() => archive(a)}>archive</button
-                      >
-                    </span>
-                  </div>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            <!-- Density -->
+            <div style="display:flex;align-items:center;background:var(--muted);padding:3px;border-radius:9px;">
+              <button onclick={() => (density = "grid")} title="Grid" style={density === "grid" ? segActive : segIdle}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </button>
+              <button onclick={() => (density = "list")} title="List" style={density === "list" ? segActive : segIdle}>
+                <Icon paths={["M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"]} size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
 
-                  {#if editingId === a.id}
-                    <div class="space-y-2 rounded bg-zinc-50 p-2">
-                      <input
-                        class="w-full rounded border px-2 py-1 text-sm"
-                        bind:value={editTitle}
-                      />
-                      <select
-                        class="w-full rounded border px-2 py-1 text-sm"
-                        bind:value={editKind}
-                      >
-                        {#each ARTEFACT_KINDS as kind (kind)}
-                          <option value={kind}>{kind}</option>
-                        {/each}
-                      </select>
-                      <input
-                        class="w-full text-xs"
-                        type="file"
-                        accept=".html,.htm,text/html"
-                        bind:files={editFiles}
-                      />
-                      <p class="text-xs text-zinc-500">
-                        Leave the file empty to keep the current payload.
-                      </p>
-                      <div class="flex gap-2">
-                        <Button size="sm" onclick={() => saveEdit(a)}>Save</Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onclick={() => (editingId = null)}>Cancel</Button
-                        >
+        <!-- Kind chips -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;">
+          {#each kindChips as chip (chip.key)}
+            {@const active = kindFilter === chip.key}
+            <button
+              onclick={() => (kindFilter = chip.key)}
+              style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;border:1px solid {active
+                ? 'transparent'
+                : 'var(--border)'};background:{active
+                ? 'var(--primary)'
+                : 'var(--card)'};color:{active ? 'var(--primary-fg)' : 'var(--fg)'};"
+            >
+              {chip.label}
+              <span
+                style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:999px;background:{active
+                  ? 'rgba(255,255,255,0.22)'
+                  : 'var(--muted)'};color:{active ? 'var(--primary-fg)' : 'var(--muted-fg)'};"
+              >
+                {chip.count}
+              </span>
+            </button>
+          {/each}
+        </div>
+
+        {#if showEmpty}
+          <div style="border:1.5px dashed var(--border-strong);border-radius:16px;padding:64px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="width:56px;height:56px;border-radius:14px;background:var(--muted);display:flex;align-items:center;justify-content:center;margin-bottom:8px;color:var(--muted-fg);">
+              <Icon
+                paths={["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M12 11v6", "M9 14h6"]}
+                size={26}
+                width={1.7}
+              />
+            </div>
+            <div style="font-size:16px;font-weight:600;">{empty.title}</div>
+            <div style="font-size:13.5px;color:var(--muted-fg);max-width:340px;">{empty.sub}</div>
+            {#if empty.cta}
+              <button
+                onclick={openUpload}
+                style="margin-top:14px;display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 16px;border-radius:9px;background:var(--primary);color:var(--primary-fg);font-weight:600;font-size:13px;border:none;cursor:pointer;font-family:inherit;"
+              >
+                <Icon paths={["M12 5v14M5 12h14"]} size={16} width={2.2} />
+                Upload your first artefact
+              </button>
+            {/if}
+          </div>
+        {:else if isDash && density === "grid"}
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:16px;">
+            {#each visibleOwned as a (a.id)}
+              <ArtefactCard
+                {a}
+                onOpen={() => openItem(a)}
+                onCopy={() => copyLink(a)}
+                onEdit={() => openEdit(a)}
+                onArchive={() => archiveItem(a)}
+                onVisibility={(v) => changeVisibility(a, v)}
+              />
+            {/each}
+          </div>
+        {:else if isDash && density === "list"}
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            {#each visibleOwned as a (a.id)}
+              <ArtefactRow
+                {a}
+                onOpen={() => openItem(a)}
+                onCopy={() => copyLink(a)}
+                onEdit={() => openEdit(a)}
+                onArchive={() => archiveItem(a)}
+                onVisibility={(v) => changeVisibility(a, v)}
+              />
+            {/each}
+          </div>
+        {:else if !isDash && density === "grid"}
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:16px;">
+            {#each visibleShared as g (g.id)}
+              <GalleryCard {g} onOpen={() => openShared(g)} />
+            {/each}
+          </div>
+        {:else}
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            {#each visibleShared as g (g.id)}
+              <GalleryRow {g} onOpen={() => openShared(g)} />
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Archived (dashboard only) -->
+        {#if isDash && archived.length > 0}
+          <div style="margin-top:34px;border-top:1px solid var(--border);padding-top:22px;">
+            <button
+              onclick={() => (archivedOpen = !archivedOpen)}
+              style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;color:var(--fg);font-family:inherit;padding:0;"
+            >
+              <Icon
+                paths={["M9 18l6-6-6-6"]}
+                size={15}
+                color="var(--muted-fg)"
+                style="transition:transform .15s ease;transform:rotate({archivedOpen ? 90 : 0}deg);"
+              />
+              <span style="font-size:14px;font-weight:600;">Archived</span>
+              <span style="font-size:12px;color:var(--muted-fg);background:var(--muted);padding:2px 8px;border-radius:999px;">
+                {archived.length}
+              </span>
+            </button>
+            {#if archivedOpen}
+              <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+                {#each archived as r (r.id)}
+                  {@const m = kindMeta(r.kind)}
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:11px;background:var(--card);">
+                    <div style="width:30px;height:30px;border-radius:7px;background:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                      <Icon paths={m.icon} size={15} width={1.8} color={m.color} />
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:13.5px;font-weight:500;color:var(--muted-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        {r.title}
+                      </div>
+                      <div style="font-size:11.5px;color:var(--muted-fg);opacity:.8;">
+                        {m.label}
                       </div>
                     </div>
-                  {/if}
-                </li>
-              {/each}
-            </ul>
+                    <button
+                      onclick={() => restoreItem(r.id)}
+                      style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:8px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;"
+                    >
+                      <Icon paths={["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5"]} size={14} />
+                      Restore
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
-        {/each}
-      {/if}
-    </section>
-
-    {#if archived.length > 0}
-      <section class="space-y-3 border-t pt-6">
-        <h2 class="text-lg font-medium">Archived</h2>
-        <ul class="divide-y rounded border">
-          {#each archived as a (a.id)}
-            <li class="flex items-center justify-between gap-3 px-3 py-2">
-              <span class="truncate text-sm text-zinc-500">{a.title}</span>
-              <button
-                type="button"
-                class="shrink-0 text-xs text-blue-600 underline"
-                onclick={() => restore(a)}>restore</button
-              >
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/if}
-
-    <section class="space-y-3 border-t pt-6">
-      <h2 class="text-lg font-medium">New artefact</h2>
-      <form class="space-y-3" onsubmit={createArtefact}>
-        <input
-          class="w-full rounded border px-3 py-2 text-sm"
-          placeholder="Title"
-          bind:value={aTitle}
-          required
-        />
-        <select
-          class="w-full rounded border px-3 py-2 text-sm"
-          bind:value={aKind}
-        >
-          {#each ARTEFACT_KINDS as kind (kind)}
-            <option value={kind}>{kind}</option>
-          {/each}
-        </select>
-        <input
-          class="w-full text-sm"
-          type="file"
-          accept=".html,.htm,text/html"
-          bind:files={aFiles}
-        />
-        {#if aError}
-          <p class="text-sm text-red-600">{aError}</p>
         {/if}
-        <Button type="submit" disabled={aBusy}>Upload artefact</Button>
-      </form>
-      {#if created}
-        <div class="rounded bg-green-50 p-3 text-sm">
-          Created <strong>{created.title}</strong> ({created.kind}) —
-          {created.visibility}, {created.payloadBytes} bytes.
-        </div>
-      {/if}
-    </section>
+      </main>
+    </div>
+  </div>
 
-    <section class="space-y-3 border-t pt-6">
-      <h2 class="text-lg font-medium">Shared with you</h2>
-      {#if sharedError}
-        <p class="text-sm text-red-600">Could not load shared artefacts: {sharedError}</p>
-      {:else if sharedGrouped.length === 0}
-        <p class="text-sm text-zinc-500">Nothing shared with you yet.</p>
-      {:else}
-        {#each sharedGrouped as [kind, items] (kind)}
-          <div class="space-y-1">
-            <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
-            <ul class="divide-y rounded border">
-              {#each items as a (a.id)}
-                <li class="flex items-center justify-between gap-3 px-3 py-2">
-                  <span class="truncate text-sm">{a.title}</span>
-                  <a
-                    class="shrink-0 text-xs text-blue-600 underline"
-                    href={`/a/${a.publicSlug}`}
-                    target="_blank"
-                    rel="noopener"
-                  >
-                    open
-                  </a>
-                </li>
-              {/each}
-            </ul>
-          </div>
-        {/each}
-      {/if}
-    </section>
-  {:else}
-    <form class="space-y-3" onsubmit={submit}>
-      <div class="flex gap-2 text-sm">
-        <button
-          type="button"
-          class="underline-offset-2 {mode === 'sign-in' ? 'font-semibold underline' : ''}"
-          onclick={() => (mode = "sign-in")}>Sign in</button
-        >
-        <button
-          type="button"
-          class="underline-offset-2 {mode === 'sign-up' ? 'font-semibold underline' : ''}"
-          onclick={() => (mode = "sign-up")}>Create account</button
-        >
-      </div>
-
-      {#if mode === "sign-up"}
-        <input
-          class="w-full rounded border px-3 py-2 text-sm"
-          placeholder="Name"
-          bind:value={name}
-          required
-        />
-      {/if}
-      <input
-        class="w-full rounded border px-3 py-2 text-sm"
-        type="email"
-        placeholder="Email"
-        bind:value={email}
-        required
-      />
-      <input
-        class="w-full rounded border px-3 py-2 text-sm"
-        type="password"
-        placeholder="Password"
-        bind:value={password}
-        required
-      />
-
-      {#if error}
-        <p class="text-sm text-red-600">{error}</p>
-      {/if}
-
-      <Button type="submit" disabled={busy}>
-        {mode === "sign-up" ? "Create account" : "Sign in"}
-      </Button>
-    </form>
+  <!-- click-away overlay for transient menus -->
+  {#if overlay.any}
+    <div
+      onclick={() => overlay.close()}
+      role="presentation"
+      style="position:fixed;inset:0;z-index:30;"
+    ></div>
   {/if}
-</main>
+
+  {#if uploadOpen}
+    <UploadModal
+      {editing}
+      busy={uploadBusy}
+      serverError={uploadError}
+      onClose={closeUpload}
+      onSubmit={submitUpload}
+    />
+  {/if}
+
+  <Toast />
+{/if}

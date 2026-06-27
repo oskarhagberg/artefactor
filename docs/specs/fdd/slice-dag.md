@@ -334,15 +334,19 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   with you" means **others'** artefacts — the viewer's own shared artefacts live in "Your
   artefacts", not here. This reverses the original S14 decision to include them.)*
 - BFF **`GET /api/shared`** is `requireAuth` — "Shared with you" is signed-in users only
-  (unauthenticated access is by slug link only). Returns `ArtefactListResponse` via the
-  shared `toArtefactSummary`; client groups by kind.
-- **Client** (`App.svelte`): a "Shared with you" section grouped by kind, each item an
-  `open` link to `/a/:slug` (the S6 serving route); reloads when the owner changes a
-  visibility tier.
+  (unauthenticated access is by slug link only). Returns `SharedListResponse`: each item is
+  `toArtefactSummary` **enriched with the owner's display identity** (`owner: { name, email }`)
+  so the gallery can attribute it ("Shared by …") and show avatar initials. Owner names/emails
+  are composed BFF-side from the Identity context via the `UserDirectory.lookup` port — the
+  same lookup that labels the S12 data-context switcher (Hosting stores only owner ids). Client
+  groups/filters by kind.
+- **Client** (`App.svelte` + `lib/components/Gallery*`): a "Shared with you" view (grid/list,
+  kind chips, sort, search) where each item shows owner name + initials and opens at `/a/:slug`
+  (the S6 serving route); reloads when the owner changes a visibility tier.
 - **Tests:** in-memory `listShared` unit (active authenticated+public across owners; excludes
   private + archived; **excludes the viewer's own**) and an end-to-end "Shared with you" test (two owners
   → a signed-in viewer sees others' shared artefacts, never their own nor others' private;
-  `401` unauthenticated).
+  each enriched with the owner's identity; `401` unauthenticated).
 
 ## Build order
 

@@ -83,6 +83,28 @@ describe("serve artefact by slug (S6)", () => {
     expect(body).not.toContain(HTML);
   });
 
+  it("shows the artefact's icon, title and kind in the shell toolbar (as in the list view)", async () => {
+    const a = await makeArtefact("public");
+    const body = await (await get(a.publicSlug!)).text();
+    expect(body).toContain(`<div class="ae-title">${a.title}</div>`);
+    // The kind label (here "Prototype") mirrors the SPA list view.
+    expect(body).toContain("Prototype");
+    // The kind icon tile is present (rendered from shared kind-presentation).
+    expect(body).toContain('class="ae-tile"');
+  });
+
+  it("hides the back-to-admin button from anonymous viewers, shows it for signed-in viewers", async () => {
+    const a = await makeArtefact("public");
+    // Anonymous (public-link) viewers have no admin UI — no back button.
+    // (The `.ae-back` CSS rule is always present, so match the element itself.)
+    const anon = await (await get(a.publicSlug!)).text();
+    expect(anon).not.toContain('class="ae-back"');
+    // A signed-in viewer can return to the admin UI at "/".
+    const signedIn = await (await get(a.publicSlug!, otherCookie)).text();
+    expect(signedIn).toContain('class="ae-back"');
+    expect(signedIn).toContain('href="/"');
+  });
+
   it("serves the artefact payload + bootstrap in the frame (read-only for the anonymous)", async () => {
     const a = await makeArtefact("public");
     const body = await (await frame(a.publicSlug!)).text();

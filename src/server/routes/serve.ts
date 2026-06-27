@@ -40,6 +40,8 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
     return c.html(
       renderHostShell({
         title: artefact.title,
+        kind: artefact.kind,
+        updatedAt: artefact.updatedAt.toISOString(),
         framePath: `/a/${encodeURIComponent(slug)}/frame`,
         authorsEndpoint: `/api/artefacts/${encodeURIComponent(slug)}/data/authors`,
         viewerId,
