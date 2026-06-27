@@ -17,17 +17,30 @@ This keeps Identity thin: there is no rich `Account` aggregate to invariant-chec
 
 ## Authentication
 
-Phased, both via BetterAuth:
+Two methods, both via BetterAuth, gated by environment:
 
-1. **During development:** **email + password** (BetterAuth credential provider). Simplest
-   to run locally with no external setup.
-2. **Then add:** **Google OAuth** (BetterAuth social sign-in). Additive — both methods can
-   coexist, linked to the same user.
+1. **Google OAuth** (BetterAuth social sign-in) — the **production** method. Google verifies
+   the email; the domain allowlist (below) then gates who may have an account.
+2. **Email + password** (BetterAuth credential provider) — enabled **only outside
+   production**, for zero-config local dev and the test suite. It is **disabled in
+   production** (`emailAndPassword.enabled = NODE_ENV !== "production"`), so the open,
+   unverified sign-up path cannot exist in prod.
 
-- Sessions are issued and validated by BetterAuth and surfaced to the Hono BFF as the
-  current authenticated user.
-- Every BFF endpoint that mutates or reads non-public artefacts (or writes data) requires
-  an authenticated session and authorizes against `ownerId` / the access matrix.
+Both are additive and can link to the same user. Sessions are issued and validated by
+BetterAuth and surfaced to the Hono BFF as the current authenticated user. Every BFF endpoint
+that mutates or reads non-public artefacts (or writes data) requires an authenticated session
+and authorizes against `ownerId` / the access matrix.
+
+### Sign-up allowlist (email domain)
+
+Account **creation** is restricted to a configured set of email domains
+(`AUTH_ALLOWED_EMAIL_DOMAINS`, default `humly.io,humly.co.uk`). The check is a pure predicate
+(`domain/identity/email-domain.ts`) enforced in BetterAuth's `databaseHooks.user.create.before`
+hook — so it applies on the *create* path for **every provider** (Google and dev email+pw). A
+disallowed domain can never create an account, and therefore can never sign in. Matching is
+exact and case-insensitive (a subdomain like `x@sub.humly.io` is **not** a match for
+`humly.io`). Google's single-domain `hd` option is deliberately not used, since two domains
+are allowed.
 
 ## API keys (programmatic push)
 
@@ -45,6 +58,8 @@ Use **BetterAuth's API-key plugin** rather than a custom credential aggregate.
 1. A private artefact is readable/mutable only by a request authenticated as its `ownerId`.
 2. An API key maps to exactly one Account; ingestion via that key is attributed to it.
 3. A revoked key authenticates nothing.
+4. An Account may be created only with an email whose domain is in the configured
+   allowlist; this holds for every authentication provider.
 
 ## Open questions
 

@@ -51,4 +51,28 @@ describe("identity (S1)", () => {
     expect(typeof body.id).toBe("string");
     expect(body.id.length).toBeGreaterThan(0);
   });
+
+  it("rejects sign-up from a disallowed email domain (IA4)", async () => {
+    const res = await app.request("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "mallory@not-humly.test",
+        password: "correct-horse-battery",
+        name: "Mallory",
+      }),
+    });
+    expect(res.status).toBe(403);
+
+    // ...and no account leaks through: she cannot then sign in.
+    const signIn = await app.request("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "mallory@not-humly.test",
+        password: "correct-horse-battery",
+      }),
+    });
+    expect(signIn.status).not.toBe(200);
+  });
 });

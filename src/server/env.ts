@@ -28,6 +28,21 @@ const schema = z.object({
         .map((o) => o.trim())
         .filter(Boolean),
     ),
+  // Google OAuth (BetterAuth social sign-in). Required in production, which is
+  // Google-only; optional in dev/test where email+password is the method.
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  // Account creation is restricted to these email domains, for every provider
+  // (IA invariant 4). Comma-separated; matched case-insensitively, exact domain.
+  AUTH_ALLOWED_EMAIL_DOMAINS: z
+    .string()
+    .default("humly.io,humly.co.uk")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((d) => d.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 }).superRefine((cfg, ctx) => {
   // Never ship the placeholder secret to production.
   if (
@@ -38,6 +53,34 @@ const schema = z.object({
       code: "custom",
       path: ["BETTER_AUTH_SECRET"],
       message: "BETTER_AUTH_SECRET must be set in production",
+    });
+  }
+  // Production is Google-only (email+password is disabled there), so the Google
+  // credentials are mandatory — without them no human could sign in.
+  if (cfg.NODE_ENV === "production") {
+    if (!cfg.GOOGLE_CLIENT_ID) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["GOOGLE_CLIENT_ID"],
+        message: "GOOGLE_CLIENT_ID must be set in production (Google-only auth)",
+      });
+    }
+    if (!cfg.GOOGLE_CLIENT_SECRET) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["GOOGLE_CLIENT_SECRET"],
+        message:
+          "GOOGLE_CLIENT_SECRET must be set in production (Google-only auth)",
+      });
+    }
+  }
+  // An empty allowlist would lock everyone out — guard against a misconfigured
+  // AUTH_ALLOWED_EMAIL_DOMAINS (e.g. set to "" or only commas).
+  if (cfg.AUTH_ALLOWED_EMAIL_DOMAINS.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["AUTH_ALLOWED_EMAIL_DOMAINS"],
+      message: "AUTH_ALLOWED_EMAIL_DOMAINS must list at least one domain",
     });
   }
 });

@@ -139,6 +139,9 @@ How much work this is depends on the **fork's visibility**:
    |---|---|---|
    | `BETTER_AUTH_SECRET` | `openssl rand -hex 32` | **Secret. Required in prod** — the BFF refuses to boot with the dev placeholder. Rotating it signs everyone out. |
    | `BETTER_AUTH_URL` | `https://artefactor.humly.io` | Public base URL BetterAuth issues session cookies/callbacks against. |
+   | `GOOGLE_CLIENT_ID` | from the Google OAuth client | **Required in prod** (Google-only auth). See §5a. |
+   | `GOOGLE_CLIENT_SECRET` | from the Google OAuth client | **Secret. Required in prod.** See §5a. |
+   | `AUTH_ALLOWED_EMAIL_DOMAINS` | `humly.io,humly.co.uk` | Optional — this is the default. Comma-separated; account creation is restricted to these domains (every provider). |
    | `AUTH_TRUSTED_ORIGINS` | `https://artefactor.humly.io` | Optional. The `BETTER_AUTH_URL` origin is trusted implicitly and the SPA is same-origin, so this is usually unnecessary — set it only if a separate origin must call the auth API. |
 
    Already baked into the image (no need to set): `NODE_ENV=production`, `PORT=3000`,
@@ -149,10 +152,35 @@ How much work this is depends on the **fork's visibility**:
 
 Don't deploy yet — the image doesn't exist until the first workflow run (step 7).
 
-> **Auth note:** Artefactor uses BetterAuth **email + password** in this phase — there is no
-> OAuth callback to configure. Google OAuth is a later, additive change (a `socialProviders`
-> entry in `src/server/auth.ts` plus its own client-id/secret env vars); add the callback URL
-> `https://artefactor.humly.io/api/auth/callback/google` to that OAuth app when you get there.
+> **Production is Google-only.** The image sets `NODE_ENV=production`, which disables
+> email+password sign-in, so `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` are **mandatory** —
+> the BFF's env schema refuses to boot without them. Set them (next section) **before** the
+> first deploy; otherwise the new container exits on boot and Coolify rolls back. Sign-up is
+> restricted to `AUTH_ALLOWED_EMAIL_DOMAINS` (default `humly.io` + `humly.co.uk`) for every
+> provider.
+
+## 5a. Google OAuth client (Google Cloud Console)
+
+Create one OAuth client and reuse it for prod (and optionally local dev):
+
+1. **Google Cloud Console** → pick/create a project (ideally in the Humly Workspace org).
+2. **APIs & Services → OAuth consent screen:** User type **Internal** (Workspace-only — the
+   tightest setting; combined with the server-side domain allowlist it double-locks access).
+   Fill app name + support email; no scopes beyond the default email/profile/openid are needed.
+3. **APIs & Services → Credentials → + Create credentials → OAuth client ID:**
+   - **Application type:** Web application.
+   - **Authorized redirect URIs:**
+     - `https://artefactor.humly.io/api/auth/callback/google` (production)
+     - `http://localhost:3000/api/auth/callback/google` (optional, for local dev)
+
+     The path is always `<BETTER_AUTH_URL>/api/auth/callback/google`.
+4. Create → copy the **Client ID** and **Client secret** into the `GOOGLE_CLIENT_ID` /
+   `GOOGLE_CLIENT_SECRET` env vars in §5.
+
+> Internal consent restricts the OAuth app to the Workspace; the `AUTH_ALLOWED_EMAIL_DOMAINS`
+> allowlist is the independent, code-level boundary (and the one that distinguishes `humly.io`
+> from `humly.co.uk` if they're separate Workspaces). Google's single-domain `hd` option isn't
+> used because two domains are allowed.
 
 ## 6. GitHub Actions → automatic deploys
 
@@ -201,8 +229,10 @@ may display it as `ci / gate`).
 3. Verify, in order:
    - `curl https://artefactor.humly.io/health` → `{"status":"ok","uptime":…,"build":"<sha>"}`
      where `<sha>` is the commit the workflow just shipped (also proves DNS + TLS).
-   - Open https://artefactor.humly.io → **sign up** with email + password → you land signed in
-     (proves `BETTER_AUTH_SECRET` + `BETTER_AUTH_URL` + Secure cookies over HTTPS).
+   - Open https://artefactor.humly.io → **Continue with Google** with your `@humly.io` /
+     `@humly.co.uk` account → you land signed in (proves the Google client, `BETTER_AUTH_URL`,
+     the callback URL, and Secure cookies over HTTPS). A non-Humly Google account should be
+     bounced back with the "not allowed" message (proves the domain allowlist).
    - Upload an artefact, open it (`/a/:slug`), interact so it writes data → **restart the app
      in Coolify** → sign back in → the artefact and its data are still there (proves both the
      SQLite DB and the payloads are on the `/data` volume, not in the container).
