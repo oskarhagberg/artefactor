@@ -38,7 +38,7 @@ Design decisions baked into this setup:
   (`src/server/env.ts`) then refuses to start unless `BETTER_AUTH_SECRET` is set to something
   other than the dev placeholder. The insecure dev default cannot reach prod by accident.
 
-Placeholders used below: `<coolify-url>` (Humly's Coolify instance), `<vps-ip>` (the existing
+Placeholders used below: `<coolify-url>` (Humly's Coolify instance), `212.147.246.42` (the existing
 VPS's public IP), `<app-uuid>` (assigned when the Coolify app is created).
 
 ---
@@ -63,7 +63,7 @@ Production deploys from **`humlytech/artefactor`**, not the personal `oskarhagbe
 
 Artefactor runs on a VPS Coolify already manages (the same instance that runs the other Humly
 apps). Nothing to provision. Just note, in Coolify → **Servers**, which server you'll target
-and its public IP → that's `<vps-ip>` for the DNS record in step 3. Leave its proxy on the
+and its public IP → that's `212.147.246.42` for the DNS record in step 3. Leave its proxy on the
 default (Traefik) — it handles HTTPS in step 5.
 
 If the box is tight on disk, remember artefact payloads can be large (100 MB cap each). Check
@@ -72,8 +72,8 @@ Cleanup** (Server → settings) is enabled so old images are pruned.
 
 ## 3. DNS
 
-Add an **A record**: `artefactor.humly.io → <vps-ip>` (the existing VPS's IP). Do this before
-creating the app so Let's Encrypt validation succeeds on the first deploy.
+Add an **A record**: `artefactor.humly.io → 212.147.246.42` (the existing VPS's IP). Do this
+before creating the app so Let's Encrypt validation succeeds on the first deploy.
 
 ## 4. Let the VPS pull from GHCR
 
@@ -92,7 +92,7 @@ How much work this is depends on the **fork's visibility**:
      needed. If not, create a classic PAT as Humly-Bot with **only `read:packages`** and:
 
      ```bash
-     ssh root@<vps-ip>
+     ssh root@212.147.246.42
      docker login ghcr.io -u Humly-Bot   # paste the PAT as the password
      ```
 
@@ -220,7 +220,7 @@ may display it as `ci / gate`).
   `artefactor-data` volume. To inspect or copy:
 
   ```bash
-  ssh root@<vps-ip>
+  ssh root@212.147.246.42
   docker run --rm -v artefactor-data:/data alpine ls -la /data /data/payloads   # see the files
   docker cp <container>:/data/artefactor.db ./artefactor-$(date +%F).db          # ad-hoc DB snapshot
   ```
