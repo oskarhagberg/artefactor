@@ -129,7 +129,10 @@ How much work this is depends on the **fork's visibility**:
      ships no curl/wget) installs `curl` precisely for this — see the [Dockerfile](../Dockerfile).
 4. **Persistent Storage → + Add Volume Mount:** name `artefactor-data`, destination `/data`.
    The image declares `/data` as a volume; the named volume holds the SQLite DB **and** the
-   artefact payloads, and survives redeploys.
+   artefact payloads, and survives redeploys. The container runs as the unprivileged `node`
+   user — its entrypoint starts as root only to `chown` `/data` to `node`, then drops
+   privileges (`gosu`), so a fresh *or* previously root-owned volume becomes writable
+   automatically (see [docker-entrypoint.sh](../docker-entrypoint.sh)).
 5. **Environment variables** (Coolify → app → Environment Variables; mark secrets as such):
 
    | Variable | Value | Notes |

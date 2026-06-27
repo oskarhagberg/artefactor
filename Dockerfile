@@ -26,10 +26,12 @@ RUN pnpm prune --prod
 FROM node:26-bookworm-slim AS runtime
 WORKDIR /app
 
-# curl is used by the container healthcheck — Coolify probes GET /health from
-# *inside* the container, and bookworm-slim ships no curl/wget by default.
+# curl: used by the container healthcheck (Coolify probes GET /health from
+#   *inside* the container, and bookworm-slim ships no curl/wget by default).
+# gosu: drop from root to the unprivileged `node` user in the entrypoint after
+#   fixing /data ownership (see docker-entrypoint.sh).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl \
+  && apt-get install -y --no-install-recommends curl gosu \
   && rm -rf /var/lib/apt/lists/*
 
 # Stamp the build commit (passed by CI as --build-arg GIT_SHA=<sha>); surfaced at
