@@ -9,7 +9,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable
+# node:26 no longer bundles corepack; install pnpm (the devEngines packageManager) directly.
+RUN npm install -g pnpm@11
 
 # Install deps, then approve native build scripts (better-sqlite3, esbuild)
 # non-interactively so the SQLite addon is compiled.
