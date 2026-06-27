@@ -164,9 +164,14 @@ Don't deploy yet — the image doesn't exist until the first workflow run (step 
 Create one OAuth client and reuse it for prod (and optionally local dev):
 
 1. **Google Cloud Console** → pick/create a project (ideally in the Humly Workspace org).
-2. **APIs & Services → OAuth consent screen:** User type **Internal** (Workspace-only — the
-   tightest setting; combined with the server-side domain allowlist it double-locks access).
-   Fill app name + support email; no scopes beyond the default email/profile/openid are needed.
+2. **APIs & Services → OAuth consent screen.** Fill app name + support email; no scopes beyond
+   the default email/profile/openid. Pick the **User type** by your Workspace layout:
+   - **`humly.io` and `humly.co.uk` are the same Google Workspace** (multi-domain) → **Internal**
+     (Workspace-only; the tightest setting).
+   - **They are separate Workspaces** → **Internal** would exclude whichever domain isn't the
+     project's Workspace. Use **External** instead — the server-side `AUTH_ALLOWED_EMAIL_DOMAINS`
+     allowlist is the real boundary, so External is safe here (only basic email/profile/openid
+     scopes, so no Google verification review is required).
 3. **APIs & Services → Credentials → + Create credentials → OAuth client ID:**
    - **Application type:** Web application.
    - **Authorized redirect URIs:**
