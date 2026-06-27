@@ -23,11 +23,10 @@
   );
 </script>
 
-<div
-  style="position:relative;background:var(--card);border:1px solid var(--border);border-radius:13px;box-shadow:var(--shadow);transition:box-shadow .15s ease, border-color .15s ease;{raised
-    ? 'z-index:50;'
-    : ''}"
->
+<!-- Grid card: base look + hover "pop" come from `.af-card-grid` (app.css). When a
+     menu/visibility picker is open the card is raised above neighbours (z 50, beating
+     the hover z 20) so the dropdown isn't clipped. -->
+<div class="af-card-grid" style={raised ? "z-index:50;" : ""}>
   <!-- thumbnail -->
   <div
     style="position:relative;height:108px;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;"

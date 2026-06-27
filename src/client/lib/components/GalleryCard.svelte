@@ -13,9 +13,8 @@
   const ownerName = $derived(g.owner.name || g.owner.email || "Unknown");
 </script>
 
-<div
-  style="position:relative;background:var(--card);border:1px solid var(--border);border-radius:13px;box-shadow:var(--shadow);"
->
+<!-- Grid card: base look + hover "pop" come from `.af-card-grid` (app.css). -->
+<div class="af-card-grid">
   <div
     style="position:relative;height:108px;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;"
   >
