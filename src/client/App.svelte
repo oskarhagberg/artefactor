@@ -22,6 +22,7 @@
   import GalleryCard from "$lib/components/GalleryCard.svelte";
   import GalleryRow from "$lib/components/GalleryRow.svelte";
   import UploadModal from "$lib/components/UploadModal.svelte";
+  import ManageAccessModal from "$lib/components/ManageAccessModal.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import Toast from "$lib/components/Toast.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
@@ -52,6 +53,9 @@
   // ---- permanent-delete confirmation (archived only) ----
   let pendingDelete = $state<ArtefactSummary | null>(null);
   let deleteBusy = $state(false);
+
+  // ---- manage-access panel (the `selected` tier, S16) ----
+  let managing = $state<ArtefactSummary | null>(null);
 
   const user = $derived(
     $session.data
@@ -210,12 +214,21 @@
       await api.setVisibility(a.id, v);
       await Promise.all([loadOwned(), loadShared()]);
       toast.show(`Visibility set to ${VIS[v].label}`, VIS[v].icon);
+      // Switching to "Specific people" jumps straight into the member picker.
+      if (v === "selected") managing = owned.find((x) => x.id === a.id) ?? a;
     } catch (e) {
       toast.show(
         e instanceof ApiError ? e.message : "Could not update visibility",
         TOAST_ICONS.alert,
       );
     }
+  }
+
+  // Closing the panel reloads so any access-driven `updatedAt` reorder shows.
+  function closeManaging() {
+    managing = null;
+    loadOwned();
+    loadShared();
   }
   async function archiveItem(a: ArtefactSummary) {
     try {
@@ -472,6 +485,7 @@
                 onEdit={() => openEdit(a)}
                 onArchive={() => archiveItem(a)}
                 onVisibility={(v) => changeVisibility(a, v)}
+                onManage={() => (managing = a)}
               />
             {/each}
           </div>
@@ -485,6 +499,7 @@
                 onEdit={() => openEdit(a)}
                 onArchive={() => archiveItem(a)}
                 onVisibility={(v) => changeVisibility(a, v)}
+                onManage={() => (managing = a)}
               />
             {/each}
           </div>
@@ -581,6 +596,10 @@
       onClose={closeUpload}
       onSubmit={submitUpload}
     />
+  {/if}
+
+  {#if managing}
+    <ManageAccessModal a={managing} onClose={closeManaging} />
   {/if}
 
   {#if pendingDelete}

@@ -13,8 +13,9 @@
     onEdit: () => void;
     onArchive: () => void;
     onVisibility: (v: Visibility) => void;
+    onManage: () => void;
   }
-  let { a, onOpen, onCopy, onEdit, onArchive, onVisibility }: Props = $props();
+  let { a, onOpen, onCopy, onEdit, onArchive, onVisibility, onManage }: Props = $props();
 
   const m = $derived(kindMeta(a.kind));
   const isShared = $derived(a.visibility !== "private" && !!a.publicSlug);
@@ -67,7 +68,7 @@
       />
     </div>
 
-    <VisibilityControl id={a.id} visibility={a.visibility} variant="block" onChoose={onVisibility} />
+    <VisibilityControl id={a.id} visibility={a.visibility} variant="block" onChoose={onVisibility} {onManage} />
 
     <!-- footer meta -->
     <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted-fg);">

@@ -1,10 +1,13 @@
 import type {
+  AccessListResponse,
   ArtefactSummary,
   ArtefactListResponse,
   MeResponse,
   PublicConfigResponse,
   SharedArtefactSummary,
   SharedListResponse,
+  UserRef,
+  UserSearchResponse,
 } from "../../shared/contracts";
 import type { ArtefactKind } from "../../domain/artefact/kind";
 import type { Visibility } from "./format";
@@ -93,6 +96,37 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ visibility }),
     });
+    if (!res.ok) await fail(res);
+  },
+
+  // S16 — Share with specific people. Search the directory for the add-member
+  // picker; list/grant/revoke an artefact's `selected`-tier members (owner-only).
+  searchUsers(query: string): Promise<UserRef[]> {
+    return fetch(`/api/users/search?q=${encodeURIComponent(query)}`)
+      .then(json<UserSearchResponse>)
+      .then((r) => r.users);
+  },
+
+  getAccess(id: string): Promise<UserRef[]> {
+    return fetch(`/api/artefacts/${id}/access`)
+      .then(json<AccessListResponse>)
+      .then((r) => r.members);
+  },
+
+  async grantAccess(id: string, userId: string): Promise<void> {
+    const res = await fetch(`/api/artefacts/${id}/access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) await fail(res);
+  },
+
+  async revokeAccess(id: string, userId: string): Promise<void> {
+    const res = await fetch(
+      `/api/artefacts/${id}/access/${encodeURIComponent(userId)}`,
+      { method: "DELETE" },
+    );
     if (!res.ok) await fail(res);
   },
 

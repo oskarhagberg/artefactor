@@ -32,6 +32,16 @@ export const VIS: Record<Visibility, VisMeta> = {
       "M8 9V6a4 4 0 0 1 8 0v3",
     ],
   },
+  selected: {
+    label: "Specific people",
+    desc: "Only people you choose",
+    icon: [
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+      "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+      "M19 8v6",
+      "M22 11h-6",
+    ],
+  },
   authenticated: {
     label: "Members",
     desc: "Any signed-in user",
@@ -53,7 +63,12 @@ export const VIS: Record<Visibility, VisMeta> = {
   },
 };
 
-export const VIS_ORDER: Visibility[] = ["private", "authenticated", "public"];
+export const VIS_ORDER: Visibility[] = [
+  "private",
+  "selected",
+  "authenticated",
+  "public",
+];
 
 /** "254 KB" / "1.2 MB" — matches the design's fmtBytes. */
 export function fmtBytes(b: number): string {

@@ -13,8 +13,9 @@
     onEdit: () => void;
     onArchive: () => void;
     onVisibility: (v: Visibility) => void;
+    onManage: () => void;
   }
-  let { a, onOpen, onCopy, onEdit, onArchive, onVisibility }: Props = $props();
+  let { a, onOpen, onCopy, onEdit, onArchive, onVisibility, onManage }: Props = $props();
 
   const m = $derived(kindMeta(a.kind));
   const isShared = $derived(a.visibility !== "private" && !!a.publicSlug);
@@ -69,6 +70,6 @@
       {/if}
     </div>
   </div>
-  <VisibilityControl id={a.id} visibility={a.visibility} variant="pill" onChoose={onVisibility} />
+  <VisibilityControl id={a.id} visibility={a.visibility} variant="pill" onChoose={onVisibility} {onManage} />
   <MoreMenu id={a.id} {isShared} variant="list" {onOpen} {onCopy} {onEdit} {onArchive} />
 </div>

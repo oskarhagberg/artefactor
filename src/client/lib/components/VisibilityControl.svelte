@@ -8,8 +8,10 @@
     visibility: Visibility;
     variant?: "block" | "pill";
     onChoose: (v: Visibility) => void;
+    // S16 — opens the "Manage access" panel; shown only while `selected`.
+    onManage?: () => void;
   }
-  let { id, visibility, variant = "block", onChoose }: Props = $props();
+  let { id, visibility, variant = "block", onChoose, onManage }: Props = $props();
 
   const key = $derived(`vis:${id}`);
   const open = $derived(overlay.isOpen(key));
@@ -26,13 +28,35 @@
       : "position:absolute;right:0;top:38px;z-index:36;min-width:236px;background:var(--card);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-md);padding:5px;animation:af-menu .12s ease;",
   );
 
+  // S16 — when shared with specific people, offer a way back into the picker.
+  const showManage = $derived(visibility === "selected" && !!onManage);
+  const MANAGE_ICON = [
+    "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+    "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  ];
+
   function choose(v: Visibility) {
     overlay.close();
     if (v !== visibility) onChoose(v);
   }
 </script>
 
-<div style="position:relative;{variant === 'block' ? '' : 'flex-shrink:0;'}">
+<div
+  style={variant === "block"
+    ? "display:flex;flex-direction:column;gap:6px;"
+    : "display:inline-flex;align-items:center;gap:6px;flex-shrink:0;"}
+>
+  {#if showManage && variant === "pill"}
+    <button
+      onclick={onManage}
+      title="Manage who has access"
+      style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;"
+    >
+      <Icon paths={MANAGE_ICON} size={13} />
+      Manage
+    </button>
+  {/if}
+  <div style="position:relative;{variant === 'block' ? '' : 'flex-shrink:0;'}">
   <button onclick={() => overlay.toggle(key)} style={btnStyle}>
     <Icon paths={meta.icon} size={13} />
     <span style="font-weight:500;">{meta.label}</span>
@@ -70,5 +94,15 @@
         </button>
       {/each}
     </div>
+  {/if}
+  </div>
+  {#if showManage && variant === "block"}
+    <button
+      onclick={onManage}
+      style="width:100%;display:flex;align-items:center;justify-content:center;gap:7px;height:30px;padding:0 9px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;"
+    >
+      <Icon paths={MANAGE_ICON} size={13} />
+      Manage access
+    </button>
   {/if}
 </div>
