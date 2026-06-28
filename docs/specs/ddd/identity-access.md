@@ -43,26 +43,43 @@ exact and case-insensitive (a subdomain like `x@sub.example.com` is **not** a ma
 `example.com`). Google's single-domain `hd` option is deliberately not used, since more than
 one domain may be allowed.
 
-## API keys (programmatic push)
+## Programmatic access (MCP connector)
 
-Use **BetterAuth's API-key plugin** rather than a custom credential aggregate.
+Claude (claude.ai / Claude design) drives Artefactor through a **remote MCP server**
+(see `docs/specs/fdd/slice-dag.md` S18). There is **no standalone REST API and no API-key
+credential** — the pinned `better-auth` (1.6.20) does not ship the api-key plugin, and a
+raw token surface was judged unnecessary baggage. Instead, programmatic callers authenticate
+with **OAuth 2.1** and act *as a user*.
 
-- An API key belongs to exactly one Account (user id).
-- A key authenticates **API push** ingestion as its owning Account — artefacts created via
-  API push are owned by that Account, with identical invariants to UI uploads.
-- Keys can be **issued** and **revoked**. A revoked key cannot authenticate.
-- Key secrets are stored hashed (handled by the plugin); the plaintext is shown once at
-  issuance.
+Use **BetterAuth's `mcp` plugin**, which embeds an **OIDC provider** (the `oidcProvider`
+schema: `oauthApplication`, `oauthAccessToken`, `oauthConsent`).
+
+- **OAuth, not keys.** A client (e.g. claude.ai) obtains a short-lived **access token** via
+  the authorization-code flow and presents it as a bearer on every MCP request. The token is
+  bound to exactly one Account; **every MCP operation is attributed to that Account** as the
+  artefact `ownerId` / data `authorId`, with identical invariants to UI actions.
+- **Dynamic client registration (DCR).** Clients self-register (`/api/auth/mcp/register`); no
+  manual provisioning. Only discovery is rooted at `/.well-known/...`; registration / authorize
+  / token live under `/api/auth/mcp/*`. A registered client completes the user's consent before
+  it can act.
+- **Discovery.** The server advertises OAuth metadata at the well-known endpoints so the
+  client can discover the authorization server and protected-resource descriptor.
+- **Revocation = the session/token lifecycle.** Access tokens expire; a token whose
+  underlying grant is gone authenticates nothing. There is no separate key to revoke.
+- Token secrets are stored hashed by the plugin; Artefactor never sees a long-lived secret.
 
 ## Invariants
 
 1. A private artefact is readable/mutable only by a request authenticated as its `ownerId`.
-2. An API key maps to exactly one Account; ingestion via that key is attributed to it.
-3. A revoked key authenticates nothing.
+2. An OAuth access token maps to exactly one Account; every MCP operation made with it is
+   attributed to that Account (artefact `ownerId` / data `authorId`).
+3. An expired or invalidated access token authenticates nothing; an MCP request without a
+   valid bearer is rejected (401 with the protected-resource descriptor).
 4. An Account may be created only with an email whose domain is in the configured
    allowlist; this holds for every authentication provider.
 
 ## Open questions
 
-- API keys: scopes/expiry beyond issue/revoke. Default: **no** scopes, revisit if needed.
+- MCP OAuth scopes: a single implicit "act as me" grant vs. finer scopes (read-only vs.
+  write). Default: **one grant**, the token can do anything its Account can; revisit if needed.
 - OAuth providers beyond Google (e.g. GitHub). Default: Google only at launch.

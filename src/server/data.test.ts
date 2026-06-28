@@ -133,4 +133,5 @@ describe("artefact data store — /data/me (S11)", () => {
     expect((await dataMe(slug, { method: "DELETE", cookie: owner })).status).toBe(204);
     expect(((await (await dataMe(slug, { method: "GET", cookie: owner })).json()) as DataEntryResponse).blob).toBeNull();
   });
+
 });

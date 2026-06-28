@@ -25,8 +25,14 @@ S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
         │                                  ├──► S12 Host UI: data-context switcher (load another author, read-only)
         │                                  └──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
         │
-        └────────────► S8 Issue / revoke API key (BetterAuth API-key plugin)
-                              └──► S9 API push ingestion (needs S2 + S8)
+        └────────────► S18 MCP connector (remote MCP server + OAuth via BetterAuth `mcp` plugin;
+                              wraps the Hosting commands as tools — needs S2, S3, S4, S5, S7, S10)
+
+~~S8 Issue / revoke API key~~ and ~~S9 API push ingestion~~ are **dropped** — the pinned
+better-auth has no api-key plugin and a raw token API was deemed unnecessary; programmatic
+access is the MCP connector (S18), authenticated by OAuth, not API keys.
+~~S17 Data merge-patch~~ is also **dropped** — a backend merge would parse the blob and break
+its opacity; data writes stay whole-blob `PUT`s and the artefact owns shape compatibility.
 ```
 
 ## Slices & acceptance criteria
@@ -214,13 +220,11 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   rejected), and an end-to-end test (archive un-serves the slug + owner view + active list,
   surfaces in `?archived=true`, restore re-serves at the prior tier).
 
-### S8 — API key issue / revoke
-- Owner issues a key (plaintext shown once) and can revoke it. *(IA 2, 3)*
-
-### S9 — API push ingestion
-- A valid API key creates an artefact attributed to the key's Account, satisfying all
-  create invariants. *(AH 10, IA 2)*
-- A revoked/invalid key is rejected. *(IA 3)*
+### S8 — API key issue / revoke — **dropped**
+### S9 — API push ingestion — **dropped**
+The pinned `better-auth` (1.6.20) ships no api-key plugin, and a raw token REST API was
+judged unnecessary. Programmatic access is the **MCP connector (S18)**, authenticated by
+OAuth. See the DDD amendment in `ddd/identity-access.md` ("Programmatic access").
 
 ### S10 — Your artefacts (owner's own list) — **done**
 - Owner lists their own `active` artefacts (archived hidden by default); shows visibility +
@@ -428,9 +432,38 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   command (grant/revoke owner-only, idempotency), end-to-end (selected mints slug; member can
   view + non-member 404 + anonymous 404; member sees it in "Shared with you"; user search).
 
+### S17 — Data merge-patch — **dropped**
+A partial-update (RFC 7396 merge) endpoint would force the backend to parse and transform the
+data blob, breaking its opacity invariant (`ddd/artefact-data.md`). Data writes stay
+whole-blob `PUT`s; an artefact owns its own data-shape compatibility (versioned `localStorage`
+keys), and a breaking shape change is published as a new artefact. The MCP connector therefore
+exposes **no data-write tool** — it surfaces `dataAuthorCount` so a breaking HTML update can be
+flagged (see S18).
+
+### S18 — MCP connector (remote MCP server + OAuth)
+- Artefactor exposes a **remote MCP server** at `POST /mcp` (Streamable HTTP) that Claude
+  (claude.ai / Claude design) connects to as a custom connector. *(IA 2)*
+- **OAuth 2.1** via BetterAuth's `mcp` plugin: discovery (`.well-known/oauth-*`), dynamic
+  client registration, authorization-code + consent, bearer-token access. A request without a
+  valid bearer → `401` with the protected-resource descriptor. *(IA 2, 3)*
+- Every tool call is **attributed to the token's Account** and enforces the *same* domain
+  invariants as the UI (access matrix, ownership) — the MCP layer is a thin adapter over the
+  existing Hosting commands, adding no new authority. *(AH 9)*
+- **Tools:** `create_artefact`, `update_artefact`, `list_artefacts`, `get_artefact`,
+  `set_visibility`, `archive_artefact`, `restore_artefact`. There is **no data-write tool**
+  (opacity, above). `get_artefact` / `update_artefact` return **`dataAuthorCount`** so the
+  model can warn before a breaking data-shape change and suggest a versioned key or a new
+  artefact. Update never deletes data blobs; it only replaces the HTML payload.
+- A companion **skill** (`skills/artefactor`) teaches Claude both to publish/update/share via
+  the connector and to write HTML that persists through the localStorage hijack (keep in sync
+  with `ddd/artefact-data.md` + the tools in `src/server/mcp/`, same no-drift rule as specs).
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
-**S7 → S15**, **S11 → {S12, S13}**, **S1 → S8 → S9**. S10 can land early (right after S2) to
-give a working surface to iterate against. The data-store branch (S11–S13) is independent of
-the sharing branch and can proceed in parallel once S2 exists.
+**S7 → S15**, **S11 → {S12, S13}**, **{S2, S3, S4, S5, S7, S10} → S18** (S18's tools expose the
+S4 single-artefact read and the S10 owner list). S10 can land early (right after
+S2) to give a working surface to iterate against. The data-store branch (S11–S13) is
+independent of the sharing branch and can proceed in parallel once S2 exists. ~~S8/S9~~ (API
+keys) and ~~S17~~ (data merge-patch) are dropped — see the DAG note. S18 is the programmatic
+surface.

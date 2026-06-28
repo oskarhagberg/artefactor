@@ -2,11 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Artefact Data context complete (through S12); building feature slices
+## Status: Hosting + Data contexts complete; MCP connector (S18) added — building feature slices
 
 **The whole Artefact Hosting context plus the Artefact Data store *and its localStorage
 runtime + host data-context switcher* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10,
-S11 (own data blob), S12 (data-context switcher), S13 (localStorage hijack), S14. The monolith builds, runs, migrates, and tests green. Auth is
+S11 (own data blob), S12 (data-context switcher), S13 (localStorage hijack), S14, S15
+(permanent delete), S16 (share with specific people), S18 (MCP connector + OAuth). The
+monolith builds, runs, migrates, and tests green. Auth is
 wired (`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session
 middleware + `requireAuth` guard, protected `GET /api/me`. Artefact Hosting: Drizzle
 `ArtefactRepository` (`save`/`findById`/`findBySlug`/`listByOwner`/`listShared`), the pure
@@ -24,8 +26,18 @@ gated, **not** auth-gated — anonymous may read a `public` artefact's data). Th
 artefacts persist with zero code changes (owner preview writes back via the id alias). S12
 serves `/a/:slug` as a host **shell** (toolbar + `<iframe>`) wrapping the artefact at
 `/a/:slug/frame` (`?author=<id>` re-seeds another author's blob read-only). Shared port
-adapters in `src/server/adapters.ts`. See `docs/specs/fdd/slice-dag.md` implementation notes.
-Next up is **S8 → S9** (API keys + push). Development is **spec-driven**: locate the governing
+adapters in `src/server/adapters.ts`. **Programmatic access (S18)** is a remote **MCP server**:
+`POST /mcp` (Streamable HTTP via `@hono/mcp`, stateless JSON responses) guarded by an OAuth
+bearer (BetterAuth's `mcp` plugin — discovery at `/.well-known/oauth-*`, dynamic client
+registration, authorize/consent/token under `/api/auth/mcp/*`, OIDC tables
+`oauth_application|oauth_access_token|oauth_consent`). Tools in `src/server/mcp/` wrap the
+existing Hosting commands (create/update/list/get/set-visibility/archive/restore), each
+attributed to the token's Account. **Data blobs stay opaque** — there is no data-write tool
+and no merge-patch (a backend merge would break opacity); `get_artefact`/`update_artefact`
+return `dataAuthorCount` so a breaking HTML change can be flagged, and the artefact owns its
+own data-shape compatibility (versioned localStorage keys). The old **S8/S9** (API-key REST
+push) and **S17** (data merge-patch) are **dropped**. See `docs/specs/fdd/slice-dag.md`.
+Development is **spec-driven**: locate the governing
 DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in
 sync in the same change.
 
@@ -53,13 +65,15 @@ The domain and build plan live in `docs/specs/` and are the **source of truth**:
 - `docs/specs/ddd/` — domain model: ubiquitous language, the **Identity & Access**,
   **Artefact Hosting**, and **Artefact Data** bounded contexts, with aggregates and
   invariants.
-- `docs/specs/fdd/slice-dag.md` — the feature slice DAG (S0–S14) and per-slice acceptance
+- `docs/specs/fdd/slice-dag.md` — the feature slice DAG (S0–S18; S8/S9/S17 dropped) and per-slice acceptance
   criteria (the seeds for TDD tests) with build order. `s0-scaffold.md` has the full S0 spec.
 
-`skills/artefactor-persistence/SKILL.md` is an Agent Skill for the **authoring** side
-(claude.ai / Claude design) — it teaches Claude to write artefacts that persist correctly via
-Artefactor's localStorage hijack. It mirrors the runtime contract in
-`docs/specs/ddd/artefact-data.md`; **keep the two in sync** (same no-drift rule as specs).
+`skills/artefactor/SKILL.md` is an Agent Skill for the **authoring + publishing** side
+(claude.ai / Claude design) — it teaches Claude both to **publish/update/share** artefacts via
+the S18 MCP connector and to **write artefacts that persist correctly** via Artefactor's
+localStorage hijack. It mirrors the runtime contract in `docs/specs/ddd/artefact-data.md` and
+the connector tool surface in `src/server/mcp/`; **keep them in sync** (same no-drift rule as
+specs).
 
 Before any change, locate the governing DDD invariant and FDD slice. Keep spec ↔ tests ↔
 code in sync in the same commit.
@@ -68,11 +82,12 @@ code in sync in the same commit.
 
 - **Tenancy:** multi-user; login required.
 - **Auth:** delegated to **BetterAuth** via its Drizzle adapter. **Email + password during
-  development**, **Google OAuth added later**. Programmatic push uses BetterAuth's **API-key
-  plugin**. The domain treats the BetterAuth user id as `ownerId` — no hand-rolled
-  user/session aggregate.
-- **Ingestion:** manual HTML upload (authenticated UI) **and** API push (key-authenticated);
-  both enforce identical invariants.
+  development**, **Google OAuth added later**. Programmatic access is the **MCP connector**
+  (S18), authenticated by **OAuth** via BetterAuth's `mcp` plugin — there is **no API-key
+  credential** (the pinned better-auth has no api-key plugin; S8/S9 dropped). The domain treats
+  the BetterAuth user id as `ownerId` — no hand-rolled user/session aggregate.
+- **Ingestion:** manual HTML upload (authenticated UI) **and** the **MCP connector**
+  (OAuth-authenticated, S18); both enforce identical invariants.
 - **Artefacts are trusted HTML:** served as-is, no sanitization/script-stripping. Payload
   cap **100 MB**, stored on the **filesystem** (SQLite row holds a reference + size + hash,
   never the inline blob).
@@ -156,7 +171,7 @@ pnpm db:migrate                # apply migrations (tsx src/infra/db/migrate.ts)
 pnpm db:studio                 # drizzle studio
 
 # Identity (S1): regenerate BetterAuth's Drizzle tables after changing src/server/auth.ts
-# (e.g. adding the api-key plugin in S8), then re-run db:generate to emit the migration.
+# (e.g. the mcp/OIDC plugin tables added in S18), then re-run db:generate to emit the migration.
 pnpm dlx @better-auth/cli generate --config src/server/auth.ts --output src/infra/db/auth-schema.ts
 ```
 
