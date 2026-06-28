@@ -17,7 +17,8 @@ S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
         │                     ├──► S4 Owner views own artefact
         │                     ├──► S5 Share / unshare (private↔authenticated↔public; mint+retain slug)
         │                     │            ├──► S6 Serve artefact by slug (access matrix)
-        │                     │            └──► S14 Shared with you (others' shared+public, by kind)
+        │                     │            ├──► S14 Shared with you (others' shared+public, by kind)
+        │                     │            └──► S16 Share with specific people (selected tier + access list UX)
         │                     ├──► S7 Archive / restore
         │                     ├──► S10 Your artefacts (list own artefacts)
         │                     └──► S11 Store: read/write own data blob
@@ -388,9 +389,48 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   `ArtefactNotFound`); end-to-end (`active → 400`, `archive → delete → 204` then gone
   everywhere + second delete 404, non-owner 404 / anonymous 401).
 
+### S16 — Share with specific people (`selected` tier + access list)
+- A 4th visibility tier `selected` shares the artefact with an explicit set of registered
+  users. It is a *shared* tier: minting/retaining a slug exactly like `authenticated`/`public`
+  (AH 4, 5, 12), but the access matrix grants view only to the owner + members of `sharedWith`
+  — everyone else (signed-in or not) gets a flat 404. *(AH 8, 13)*
+- The owner manages members incrementally: **add** and **remove** individuals, searching the
+  user directory by **name or email**. Granting is a set op (idempotent), the owner can't be
+  added, and the list can't change while archived. *(AH 14)*
+- `sharedWith` is retained across tier changes and archive/restore; only consulted under
+  `selected` (empty list ⇒ owner-only). *(AH 13)*
+- A recipient sees a `selected` artefact they're a member of in **"Shared with you"** (S14),
+  attributed to the owner, alongside `authenticated`/`public` shares. *(AH 8)*
+
+**Implementation notes (from building S16):**
+- **Domain**: `visibility.ts` adds `selected` (so `ShareableTier` includes it and
+  `shareArtefact` mints/retains its slug unchanged). `artefact.ts` gains `sharedWith: readonly
+  string[]` (created empty; carried through every transition by spread). `access.ts` extends
+  `ViewableArtefact` with `sharedWith` and adds the `selected` case (owner ∨ member). New pure
+  `access-list.ts`: `grantAccess`/`revokeAccess` (set semantics, owner-rejected, archived-block).
+- **Persistence**: new `artefact_access (artefact_id, user_id, granted_at)` join table
+  (PK `(artefact_id, user_id)`, indexed on `user_id` for the "shared with me" lookup). The
+  `visibility` text enum gains `selected` (no SQL change — text columns are unconstrained).
+  `ArtefactRepository.save` syncs `sharedWith` to the join table (diff add/remove); reads
+  populate `sharedWith` (`findById`/`findBySlug`/`listByOwner`); `listShared` unions
+  `authenticated`/`public` with `selected` artefacts where the viewer is a member.
+- **Command**: `manage-access.command.ts` — `grantAccessCommand`/`revokeAccessCommand` load the
+  owned artefact (non-owner → not-found, AH9), apply the domain fn, save. `set-visibility`
+  needs no change — `selected` flows through the existing share path.
+- **BFF**: `GET /api/users/search?q=` (auth-gated; name/email substring, excludes self, capped)
+  via a new `UserDirectory.search`. `GET /api/artefacts/:id/access` (owner-only; members
+  enriched with name/email), `POST …/access {userId}` (grant; 404 unknown user),
+  `DELETE …/access/:userId` (revoke). `PUT …/visibility` now accepts `selected`.
+- **Client**: `ManageAccessModal.svelte` — debounced user search + member list with remove;
+  opened from `VisibilityControl` when "Specific people" is chosen (and re-openable via a
+  "Manage" affordance while `selected`). `format.ts` adds the tier (label "Specific people").
+- **Tests:** domain (access matrix `selected` grid; grant/revoke set semantics + guards),
+  command (grant/revoke owner-only, idempotency), end-to-end (selected mints slug; member can
+  view + non-member 404 + anonymous 404; member sees it in "Shared with you"; user search).
+
 ## Build order
 
-Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14}**,
+Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
 **S7 → S15**, **S11 → {S12, S13}**, **S1 → S8 → S9**. S10 can land early (right after S2) to
 give a working surface to iterate against. The data-store branch (S11–S13) is independent of
 the sharing branch and can proceed in parallel once S2 exists.

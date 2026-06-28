@@ -12,6 +12,10 @@ export interface Artefact {
   title: string;
   kind: ArtefactKind;
   visibility: Visibility;
+  // The users granted view access under the `selected` tier (AH13/14). A set —
+  // no duplicates, never the owner. Retained across tier changes + archive, and
+  // only consulted while `visibility === "selected"`. Empty ⇒ owner-only.
+  sharedWith: readonly string[];
   publicSlug: string | null;
   status: Status;
   payloadRef: string;
@@ -55,6 +59,7 @@ export function createArtefact(input: CreateArtefactInput): Artefact {
     title,
     kind: input.kind,
     visibility: "private",
+    sharedWith: [],
     publicSlug: null,
     status: "active",
     payloadRef: input.payload.ref,
@@ -66,7 +71,8 @@ export function createArtefact(input: CreateArtefactInput): Artefact {
   };
 }
 
-// The two shareable visibility tiers (everything except `private`).
+// The shareable visibility tiers (everything except `private`): `selected`,
+// `authenticated`, `public`. All mint/retain a slug on first share (AH4/5/12).
 export type ShareableTier = Exclude<Visibility, "private">;
 
 export interface ShareOptions {

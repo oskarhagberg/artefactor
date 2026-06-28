@@ -5,18 +5,21 @@ import type { Artefact } from "./artefact";
 // reuse (slug serving in S6, "Shared with you" in S14, data access in S11/S12).
 export type ViewableArtefact = Pick<
   Artefact,
-  "visibility" | "status" | "ownerId"
+  "visibility" | "status" | "ownerId" | "sharedWith"
 >;
 
 // The access matrix for serving an artefact (AH8), gated by archived-is-inert
 // (AH7). `viewerId` is the authenticated user id, or null when unauthenticated.
 //
-//   visibility     | owner | other signed-in | unauthenticated
-//   -------------- | ----- | --------------- | ---------------
-//   private        |  yes  |       no        |       no
-//   authenticated  |  yes  |       yes       |       no
-//   public         |  yes  |       yes       |       yes
+//   visibility     | owner | member | other signed-in | unauthenticated
+//   -------------- | ----- | ------ | --------------- | ---------------
+//   private        |  yes  |   —    |       no        |       no
+//   selected       |  yes  |  yes   |       no        |       no
+//   authenticated  |  yes  |  yes   |       yes       |       no
+//   public         |  yes  |  yes   |       yes       |       yes
 //
+// A `selected` artefact is visible to the owner and to any user in `sharedWith`
+// (AH8/13); everyone else — signed-in or anonymous — gets a flat deny.
 // An archived artefact is never served — it returns false to everyone, owner
 // included (the owner reaches it only via the "Your artefacts" archived filter).
 export function canViewArtefact(
@@ -30,6 +33,12 @@ export function canViewArtefact(
       return true;
     case "authenticated":
       return viewerId !== null;
+    case "selected":
+      return (
+        viewerId !== null &&
+        (viewerId === artefact.ownerId ||
+          artefact.sharedWith.includes(viewerId))
+      );
     case "private":
       return viewerId !== null && viewerId === artefact.ownerId;
   }

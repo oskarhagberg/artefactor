@@ -14,8 +14,9 @@ Aggregate root. The consistency boundary for one hosted artefact.
 | `title` | string | Human label. Required, non-empty. |
 | `kind` | ArtefactKind | `prototype` \| `slide-deck` \| `form` \| `interactive-doc` \| `other`. Metadata; drives browse grouping. |
 | `htmlPayload` | HtmlPayload | Trusted HTML, stored as-is on the **filesystem**. Non-empty, ≤ `MAX_PAYLOAD_BYTES` (= **100 MB**). Row holds a reference + byte size + content hash. |
-| `visibility` | Visibility | `private` \| `authenticated` \| `public`. |
-| `publicSlug` | Slug \| null | Minted the first time visibility leaves `private`; thereafter retained. |
+| `visibility` | Visibility | `private` \| `selected` \| `authenticated` \| `public`. |
+| `sharedWith` | Set\<UserId\> | The specific users granted view access (used only while `visibility = selected`). A set — no duplicates; the owner is never a member (they always have access). Retained across tier changes. |
+| `publicSlug` | Slug \| null | Minted the first time visibility leaves `private` (including for `selected`); thereafter retained. |
 | `status` | Status | `active` \| `archived`. |
 | `createdAt` | timestamp | Set on create. |
 | `updatedAt` | timestamp | Bumped on any mutation. |
@@ -28,7 +29,12 @@ Aggregate root. The consistency boundary for one hosted artefact.
 - **`HtmlPayload`** — trusted HTML string. Invariant: non-empty and ≤ `MAX_PAYLOAD_BYTES`
   (**100 MB**). **No sanitization** — payloads are trusted. **Stored on the filesystem**
   (see Persistence note), not inline in SQLite.
-- **`Visibility`** — `private` | `authenticated` | `public` (see access matrix below).
+- **`Visibility`** — `private` | `selected` | `authenticated` | `public` (see access matrix below).
+  `selected` shares the artefact with an explicit set of registered users (`sharedWith`) —
+  a "shared" tier (it mints/retains a slug like the others), but gated by membership of the
+  set rather than by login-state.
+- **`AccessList`** (`sharedWith`) — the set of `UserId`s granted view access under the
+  `selected` tier. Set semantics (no duplicates); the owner is implicit and never a member.
 - **`Slug`** — short random URL-safe token. Immutable once minted. Globally unique across
   all artefacts.
 - **`Status`** — `active` | `archived`.
@@ -38,8 +44,8 @@ Aggregate root. The consistency boundary for one hosted artefact.
 1. **Ownership**: `ownerId` is always present and immutable; it references a valid Account.
 2. **Payload**: `htmlPayload` is non-empty and ≤ `MAX_PAYLOAD_BYTES` (100 MB).
 3. **Title**: non-empty.
-4. **Shared ⟹ slug**: if `visibility ∈ {authenticated, public}` then `publicSlug` is
-   non-null. (A `private` artefact may also carry a slug if it was ever shared.)
+4. **Shared ⟹ slug**: if `visibility ∈ {selected, authenticated, public}` then `publicSlug`
+   is non-null. (A `private` artefact may also carry a slug if it was ever shared.)
 5. **Slug permanence**: a slug is minted the first time visibility leaves `private`, and is
    thereafter immutable and **retained** for the life of the artefact — including across
    `unshare`/`share` cycles. Re-sharing reuses the same slug.
@@ -48,7 +54,8 @@ Aggregate root. The consistency boundary for one hosted artefact.
    returns 404), is hidden from default listings, and cannot be edited or have its
    visibility changed until restored. Its data entries are likewise inert.
 8. **Access by visibility** *(active artefacts; see matrix below)*: `private` → owner only;
-   `authenticated` → any signed-in user; `public` → anyone, no auth.
+   `selected` → owner + any user in `sharedWith`; `authenticated` → any signed-in user;
+   `public` → anyone, no auth.
 9. **Owner authority**: only a request authenticated as `ownerId` may edit, change
    visibility, archive, or restore an artefact — at any visibility tier.
 10. **Ingestion parity**: artefacts created by **API push** satisfy the exact same
@@ -56,14 +63,26 @@ Aggregate root. The consistency boundary for one hosted artefact.
 11. **Delete is archived-only**: an artefact may be permanently deleted only while
     `archived`, only by its owner; deletion also removes its payload file and all its data
     entries.
+12. **Selected ⟹ slug**: `selected` is a shared tier — it mints a slug on the first share
+    and retains it exactly like `authenticated`/`public` (subsumed by AH4/AH5). The slug
+    link is live only for the owner and members; everyone else gets a flat 404.
+13. **Access-list retention**: `sharedWith` is retained verbatim across every visibility
+    transition (including `unshare` to `private`) and across `archive`/`restore`. It is only
+    *consulted* while `visibility = selected`; an empty `sharedWith` under `selected` means
+    owner-only (it behaves like `private` until members are added).
+14. **Access-list authority & shape**: only the owner may grant/revoke members (AH9 applies).
+    `sharedWith` is a set (granting an existing member is a no-op; revoking a non-member is a
+    no-op). The owner cannot be added (they always have access). The list cannot be changed
+    while `archived` (AH7). Granting a member does not change the visibility tier.
 
 ## Access matrix (active artefacts)
 
-| visibility | owner | other signed-in user | unauthenticated |
-|------------|-------|----------------------|-----------------|
-| `private` | view + edit | 404 | 404 |
-| `authenticated` | view + edit | view | 404 (login required) |
-| `public` | view + edit | view | view |
+| visibility | owner | member (in `sharedWith`) | other signed-in user | unauthenticated |
+|------------|-------|--------------------------|----------------------|-----------------|
+| `private` | view + edit | — | 404 | 404 |
+| `selected` | view + edit | view | 404 | 404 (login required) |
+| `authenticated` | view + edit | view | view | 404 (login required) |
+| `public` | view + edit | view | view | view |
 
 Archived artefacts return 404 to everyone (including the owner's public-style view); the
 owner reaches them only via the "Your artefacts" archived filter to restore them.
@@ -76,9 +95,11 @@ States are the product of `visibility × status`. Allowed transitions:
 |------------|------|----|-------|
 | **create** | — | `active` / `private` | valid owner, valid payload + title |
 | **edit** | `active` | `active` (fields updated) | owner; not archived |
-| **share** | `active` / `private` | `active` / `authenticated` or `public` | owner; mint slug if none, else reuse retained slug |
-| **unshare** | `active` / `authenticated`\|`public` | `active` / `private` | owner; retain slug (link 404s while private) |
-| **change tier** | `active` / `authenticated` ⇄ `public` | (same status) | owner |
+| **share** | `active` / `private` | `active` / `selected`, `authenticated` or `public` | owner; mint slug if none, else reuse retained slug |
+| **unshare** | `active` / `selected`\|`authenticated`\|`public` | `active` / `private` | owner; retain slug (link 404s while private) and `sharedWith` |
+| **change tier** | `active` / any shared tier ⇄ any shared tier | (same status) | owner |
+| **grant access** | `active` (any tier) | (same; `sharedWith` += user) | owner; not the owner themselves; consulted only under `selected` |
+| **revoke access** | `active` (any tier) | (same; `sharedWith` −= user) | owner |
 | **archive** | `active` | `archived` | owner |
 | **restore** | `archived` | `active` | owner; restores prior `visibility` |
 | **delete** | `archived` | — (removed) | owner; **only an archived artefact** may be permanently deleted |

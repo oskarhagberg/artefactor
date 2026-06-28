@@ -3,12 +3,14 @@ import { canViewArtefact, type ViewableArtefact } from "./access";
 
 const OWNER = "owner-1";
 const OTHER = "user-2";
+const MEMBER = "member-3";
 
 function artefact(
   visibility: ViewableArtefact["visibility"],
   status: ViewableArtefact["status"] = "active",
+  sharedWith: string[] = [],
 ): ViewableArtefact {
-  return { visibility, status, ownerId: OWNER };
+  return { visibility, status, ownerId: OWNER, sharedWith };
 }
 
 describe("canViewArtefact — access matrix (S6, AH8)", () => {
@@ -22,6 +24,20 @@ describe("canViewArtefact — access matrix (S6, AH8)", () => {
     expect(canViewArtefact(artefact("authenticated"), null)).toBe(false);
     expect(canViewArtefact(artefact("authenticated"), OTHER)).toBe(true);
     expect(canViewArtefact(artefact("authenticated"), OWNER)).toBe(true);
+  });
+
+  it("selected is viewable by the owner and members only (AH8/13)", () => {
+    const a = artefact("selected", "active", [MEMBER]);
+    expect(canViewArtefact(a, OWNER)).toBe(true); // owner always
+    expect(canViewArtefact(a, MEMBER)).toBe(true); // granted member
+    expect(canViewArtefact(a, OTHER)).toBe(false); // signed-in non-member
+    expect(canViewArtefact(a, null)).toBe(false); // anonymous
+  });
+
+  it("selected with an empty access list is owner-only (AH13)", () => {
+    const a = artefact("selected", "active", []);
+    expect(canViewArtefact(a, OWNER)).toBe(true);
+    expect(canViewArtefact(a, OTHER)).toBe(false);
   });
 
   it("private is viewable only by the owner", () => {

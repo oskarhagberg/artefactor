@@ -1,4 +1,9 @@
-export const VISIBILITIES = ["private", "authenticated", "public"] as const;
+export const VISIBILITIES = [
+  "private",
+  "selected",
+  "authenticated",
+  "public",
+] as const;
 
 export type Visibility = (typeof VISIBILITIES)[number];
 
