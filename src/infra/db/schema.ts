@@ -101,6 +101,94 @@ export const verification = sqliteTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
+
+// OAuth provider tables (S18 — MCP connector). Owned by BetterAuth's `mcp`
+// plugin (which embeds the `oidcProvider` schema). Field *names* (the JS keys)
+// must match the plugin's model fields; column names follow our snake_case
+// convention. DO NOT hand-edit shapes — they mirror
+// node_modules/better-auth/.../plugins/oidc-provider/schema.mjs. A registered
+// OAuth client (`oauthApplication`) is created via dynamic client registration;
+// each issued bearer is an `oauthAccessToken` bound to a `user`.
+export const oauthApplication = sqliteTable(
+  "oauth_application",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    icon: text("icon"),
+    metadata: text("metadata"),
+    clientId: text("client_id").notNull().unique(),
+    clientSecret: text("client_secret"),
+    redirectUrls: text("redirect_urls").notNull(),
+    type: text("type").notNull(),
+    disabled: integer("disabled", { mode: "boolean" }).default(false),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (t) => [index("oauth_application_user_idx").on(t.userId)],
+);
+
+export const oauthAccessToken = sqliteTable(
+  "oauth_access_token",
+  {
+    id: text("id").primaryKey(),
+    accessToken: text("access_token").notNull().unique(),
+    refreshToken: text("refresh_token").notNull().unique(),
+    accessTokenExpiresAt: integer("access_token_expires_at", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    scopes: text("scopes").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("oauth_access_token_client_idx").on(t.clientId),
+    index("oauth_access_token_user_idx").on(t.userId),
+  ],
+);
+
+export const oauthConsent = sqliteTable(
+  "oauth_consent",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    scopes: text("scopes").notNull(),
+    consentGiven: integer("consent_given", { mode: "boolean" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("oauth_consent_client_idx").on(t.clientId),
+    index("oauth_consent_user_idx").on(t.userId),
+  ],
+);
 // ────────────────────────────────────────────────────────────────────────────
 
 // Artefact Hosting context. The 100 MB HTML payload itself lives on the

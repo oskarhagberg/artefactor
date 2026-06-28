@@ -30,6 +30,32 @@ never manage who it belongs to.
 `fetch`/network code to save data, and don't use other storage mechanisms — only
 `localStorage` is hijacked. Get `localStorage` right and persistence is automatic.
 
+## Publishing to Artefactor (the MCP connector)
+
+If the user has connected the **Artefactor MCP connector** (in claude.ai / Claude design),
+you can publish and manage artefacts directly — no manual upload. The connector authenticates
+as the user (OAuth), so everything you create is owned by them. Tools:
+
+- **`create_artefact`** `{ title, kind, html, visibility? }` — publish a self-contained HTML
+  document. `kind` is one of `prototype | slide-deck | form | interactive-doc | other`.
+  `visibility` is `private` (default) | `authenticated` | `public` | `selected`. Returns the
+  artefact id, slug, and share URL (when shared).
+- **`update_artefact`** `{ id, title?, kind?, html? }` — replace fields. `html` is a **full
+  replacement**, not a patch — send the whole document.
+- **`list_artefacts`** / **`get_artefact`** — find what the user already has (use these before
+  creating a duplicate; update in place when iterating on an existing artefact).
+- **`set_visibility`** / **`archive_artefact`** / **`restore_artefact`** — manage sharing and
+  lifecycle.
+- **`patch_artefact_data`** `{ id, patch }` — merge a partial JSON object into the artefact's
+  saved data (the same blob the artefact reads via `localStorage`), using RFC 7396 merge-patch
+  (a `null` value deletes a key). Use this to seed or adjust an artefact's stored state from
+  the outside; the artefact itself still just uses `localStorage` (below).
+
+Typical flow: write the HTML following the rules below → `create_artefact` → share with
+`set_visibility` or by passing `visibility` → iterate with `update_artefact`. When the user
+says "update the X artefact", prefer `list_artefacts`/`get_artefact` + `update_artefact` over
+creating a new one.
+
 ## Rules
 
 1. **Persist only through `localStorage`.** Not IndexedDB, not cookies, not `sessionStorage`,

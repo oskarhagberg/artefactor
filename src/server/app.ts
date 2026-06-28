@@ -5,6 +5,7 @@ import { env } from "./env";
 import { artefactRepository, dataRepository, payloadStore } from "./adapters";
 import { createApiRoutes } from "./routes";
 import { createArtefactServingRoutes } from "./routes/serve";
+import { createMcpRoutes } from "./mcp/routes";
 import type { HealthResponse } from "../shared/contracts";
 
 export function createApp() {
@@ -27,6 +28,19 @@ export function createApp() {
   app.route(
     "/a",
     createArtefactServingRoutes({
+      repo: artefactRepository,
+      payloadStore,
+      dataRepo: dataRepository,
+    }),
+  );
+
+  // S18 — MCP connector (remote MCP server + OAuth discovery). Mounted at the
+  // root, before the static handlers, so `/mcp` and `/.well-known/oauth-*` are
+  // not swallowed by the SPA fallback. OAuth endpoints proper live under
+  // /api/auth/* (the BetterAuth `mcp` plugin).
+  app.route(
+    "/",
+    createMcpRoutes({
       repo: artefactRepository,
       payloadStore,
       dataRepo: dataRepository,

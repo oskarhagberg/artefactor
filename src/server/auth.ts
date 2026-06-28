@@ -1,8 +1,17 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { mcp } from "better-auth/plugins";
 import { db } from "../infra/db/client";
-import { account, session, user, verification } from "../infra/db/schema";
+import {
+  account,
+  oauthAccessToken,
+  oauthApplication,
+  oauthConsent,
+  session,
+  user,
+  verification,
+} from "../infra/db/schema";
 import { env } from "./env";
 import { isEmailDomainAllowed } from "../domain/identity/email-domain";
 
@@ -65,9 +74,24 @@ export const auth = betterAuth({
       },
     },
   },
+  // S18 — programmatic access via a remote MCP server. The `mcp` plugin embeds
+  // an OIDC provider: it self-registers OAuth discovery (`.well-known/oauth-*`),
+  // dynamic client registration (`/mcp/register`), authorize/consent/token, and
+  // `getMcpSession` (bearer → Account) used to guard `POST /mcp`. `loginPage` is
+  // where an unauthenticated authorize request is sent to sign in — the SPA root.
+  // See docs/specs/ddd/identity-access.md "Programmatic access (MCP connector)".
+  plugins: [mcp({ loginPage: "/" })],
   database: drizzleAdapter(db, {
     provider: "sqlite",
-    schema: { user, session, account, verification },
+    schema: {
+      user,
+      session,
+      account,
+      verification,
+      oauthApplication,
+      oauthAccessToken,
+      oauthConsent,
+    },
   }),
 });
 
