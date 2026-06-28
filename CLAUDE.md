@@ -25,7 +25,10 @@ artefacts persist with zero code changes (owner preview writes back via the id a
 serves `/a/:slug` as a host **shell** (toolbar + `<iframe>`) wrapping the artefact at
 `/a/:slug/frame` (`?author=<id>` re-seeds another author's blob read-only). Shared port
 adapters in `src/server/adapters.ts`. See `docs/specs/fdd/slice-dag.md` implementation notes.
-Next up is **S8 → S9** (API keys + push). Development is **spec-driven**: locate the governing
+Next up is **S17 → S18** (data merge-patch + the OAuth-authed MCP connector). The old
+**S8/S9** (API-key REST push) are **dropped** — the pinned better-auth has no api-key plugin
+and a raw token API was deemed unnecessary; programmatic access is the MCP connector.
+Development is **spec-driven**: locate the governing
 DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in
 sync in the same change.
 
