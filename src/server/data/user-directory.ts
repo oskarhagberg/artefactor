@@ -9,7 +9,22 @@ export interface UserIdentity {
   email: string;
 }
 
+// A directory user with their id — what the S16 member picker needs.
+export interface DirectoryUser extends UserIdentity {
+  id: string;
+}
+
+export interface UserSearchOptions {
+  // Exclude this user id from the results (the caller never shares with self).
+  excludeId?: string;
+  // Cap the number of hits (defaults to a small page size in the adapter).
+  limit?: number;
+}
+
 export interface UserDirectory {
   // Resolve the given user ids; unknown ids are simply absent from the map.
   lookup(ids: string[]): Promise<Map<string, UserIdentity>>;
+  // Search registered users by name or email (substring, case-insensitive) for
+  // the S16 add-member picker. Empty/blank query returns no results.
+  search(query: string, options?: UserSearchOptions): Promise<DirectoryUser[]>;
 }

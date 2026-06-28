@@ -11,6 +11,7 @@ import {
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
+import { createUserRoutes } from "./users";
 import type {
   MeResponse,
   PublicConfigResponse,
@@ -87,6 +88,9 @@ export function createApiRoutes() {
     });
   });
 
+  // S16 — user directory search for the share-with-specific-people picker.
+  api.route("/users", createUserRoutes({ userDirectory }));
+
   // Artefact Hosting routes — share the domain ports' adapters (see adapters.ts).
   api.route(
     "/artefacts",
@@ -94,6 +98,7 @@ export function createApiRoutes() {
       repo: artefactRepository,
       payloadStore,
       dataRepo: dataRepository,
+      userDirectory,
     }),
   );
 

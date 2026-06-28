@@ -35,7 +35,7 @@ export interface ArtefactSummary {
   ownerId: string;
   title: string;
   kind: ArtefactKind;
-  visibility: "private" | "authenticated" | "public";
+  visibility: "private" | "selected" | "authenticated" | "public";
   status: "active" | "archived";
   publicSlug: string | null;
   payloadBytes: number;
@@ -63,10 +63,37 @@ export interface SharedListResponse {
 }
 
 // S5 — Share / unshare. Set an artefact's visibility tier. `private` unshares
-// (retaining the slug); `authenticated`/`public` share (minting the slug on the
-// first share, reusing it thereafter).
+// (retaining the slug); `selected`/`authenticated`/`public` share (minting the
+// slug on the first share, reusing it thereafter). `selected` additionally gates
+// on the access list managed via the S16 endpoints below.
 export interface SetVisibilityRequest {
   visibility: ArtefactSummary["visibility"];
+}
+
+// S16 — Share with specific people. A registered user as seen by the owner: a
+// directory search hit, or a current member of an artefact's `selected`-tier
+// access list. `id` is the BetterAuth user id (the domain's stable user ref).
+export interface UserRef {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// `GET /api/users/search?q=` — users matching a name/email query, for the
+// add-member picker. Excludes the caller; capped server-side.
+export interface UserSearchResponse {
+  users: UserRef[];
+}
+
+// `GET /api/artefacts/:id/access` — the artefact's current members (owner-only),
+// enriched with display identity. `POST` grants ({ userId }); `DELETE
+// /:userId` revokes.
+export interface AccessListResponse {
+  members: UserRef[];
+}
+
+export interface GrantAccessRequest {
+  userId: string;
 }
 
 // S11 — Artefact Data. The caller's own opaque JSON blob for an artefact

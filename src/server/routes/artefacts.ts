@@ -11,6 +11,11 @@ import {
 } from "../artefacts/create-artefact.command";
 import { setArtefactVisibilityCommand } from "../artefacts/set-visibility.command";
 import {
+  grantAccessCommand,
+  revokeAccessCommand,
+  listAccessMembers,
+} from "../artefacts/manage-access.command";
+import {
   editArtefactCommand,
   type EditArtefactInput,
 } from "../artefacts/edit-artefact.command";
@@ -23,17 +28,22 @@ import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { renderServedArtefact } from "../runtime/render";
 import { renderHostShell } from "../runtime/shell";
 import type { DataRepository } from "../../domain/data/data-repository";
+import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
+  AccessListResponse,
   ArtefactListResponse,
   ArtefactSummary,
+  GrantAccessRequest,
   SetVisibilityRequest,
 } from "../../shared/contracts";
 
 // Route-level deps: the command deps plus the data repo needed to seed the S13
-// localStorage bootstrap when serving the owner-preview HTML.
+// localStorage bootstrap when serving the owner-preview HTML, and the user
+// directory used to enrich + validate the S16 access list.
 export type ArtefactRoutesDeps = CreateArtefactDeps & {
   dataRepo: DataRepository;
+  userDirectory: UserDirectory;
 };
 
 // BFF routes for the Artefact Hosting context. S2 adds manual HTML upload;
@@ -146,6 +156,78 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // S16 — Manage access (the `selected` tier's member list). All three are
+  // owner-only; a non-owner or unknown id is a flat 404 (existence not leaked,
+  // AH9). Membership is consulted only while visibility is `selected`, but it
+  // can be curated at any tier.
+
+  // List the current members, enriched with display identity for the picker.
+  r.get("/:id/access", requireAuth, async (c) => {
+    try {
+      const memberIds = await listAccessMembers(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        { repo: deps.repo },
+      );
+      const identities = await deps.userDirectory.lookup(memberIds);
+      return c.json<AccessListResponse>({
+        members: memberIds.map((id) => ({
+          id,
+          name: identities.get(id)?.name ?? "",
+          email: identities.get(id)?.email ?? "",
+        })),
+      });
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      throw err;
+    }
+  });
+
+  // Grant a user access. Validates the target is a real registered user so the
+  // list can't accrue dangling ids. 204 on success.
+  r.post("/:id/access", requireAuth, async (c) => {
+    const body = await c.req
+      .json<Partial<GrantAccessRequest>>()
+      .catch(() => ({}) as Partial<GrantAccessRequest>);
+    const userId = body.userId;
+    if (!userId || typeof userId !== "string") {
+      return c.json({ error: "userId is required" }, 400);
+    }
+    try {
+      const known = await deps.userDirectory.lookup([userId]);
+      if (!known.has(userId)) {
+        return c.json({ error: "unknown user" }, 400);
+      }
+      await grantAccessCommand(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c), userId },
+        { repo: deps.repo },
+      );
+      return c.body(null, 204);
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // Revoke a user's access. Idempotent — revoking a non-member still 204s.
+  r.delete("/:id/access/:userId", requireAuth, async (c) => {
+    try {
+      await revokeAccessCommand(
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          userId: c.req.param("userId"),
+        },
+        { repo: deps.repo },
+      );
+      return c.body(null, 204);
     } catch (err) {
       if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
       if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
