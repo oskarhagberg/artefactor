@@ -32,7 +32,12 @@ bearer (BetterAuth's `mcp` plugin — discovery at `/.well-known/oauth-*`, dynam
 registration, authorize/consent/token under `/api/auth/mcp/*`, OIDC tables
 `oauth_application|oauth_access_token|oauth_consent`). Tools in `src/server/mcp/` wrap the
 existing Hosting commands (create/update/list/get/set-visibility/archive/restore), each
-attributed to the token's Account. **Data blobs stay opaque** — there is no data-write tool
+attributed to the token's Account. Because connector-only clients (e.g. Claude design) **can't
+load the `artefactor` Agent Skill**, the connector self-describes its authoring contract: the
+MCP server's `instructions` carry a compact persistence summary (ambient, present before any
+tool call) and a `get_authoring_guide` tool returns the full `skills/artefactor/SKILL.md` body
+on demand (the Dockerfile copies `skills/` into the runtime image for this). The short summary
+in `src/server/mcp/authoring-guide.ts` and the skill are kept in sync (same no-drift rule). **Data blobs stay opaque** — there is no data-write tool
 and no merge-patch (a backend merge would break opacity); `get_artefact`/`update_artefact`
 return `dataAuthorCount` so a breaking HTML change can be flagged, and the artefact owns its
 own data-shape compatibility (versioned localStorage keys). The old **S8/S9** (API-key REST

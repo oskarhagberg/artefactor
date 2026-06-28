@@ -19,6 +19,7 @@ import {
 } from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { toArtefactSummary } from "../routes/artefacts";
+import { loadAuthoringGuide } from "./authoring-guide";
 import { env } from "../env";
 
 // S18 — the MCP tool surface. Each tool is a thin adapter over the existing
@@ -97,7 +98,7 @@ export function registerArtefactTools(
     {
       title: "Create artefact",
       description:
-        "Publish a self-contained HTML artefact to Artefactor. Returns the new artefact (id, slug, share URL). Optionally set its visibility; default is private.",
+        "Publish a self-contained HTML artefact to Artefactor. Returns the new artefact (id, slug, share URL). Optionally set its visibility; default is private. The HTML must follow Artefactor's persistence contract so any data it saves survives — persist only through localStorage (which Artefactor hijacks to a server-side store); call get_authoring_guide first if you are unsure.",
       inputSchema: {
         title: z.string().min(1).describe("Human-readable title."),
         kind: z
@@ -260,5 +261,36 @@ export function registerArtefactTools(
         );
         return summarize(updated);
       }),
+  );
+
+  // S18 — the authoring skill, on demand. Clients that can use the connector but
+  // can't load Agent Skills (e.g. Claude design) read the FULL contract here:
+  // how to write HTML that persists (the localStorage rules, a template, the
+  // shipping checklist) and how to publish / handle breaking data-shape changes.
+  // The server `instructions` carry the compact summary; this is the manual.
+  server.registerTool(
+    "get_authoring_guide",
+    {
+      title: "Get authoring guide",
+      description:
+        "Return the full Artefactor authoring guide: how to write HTML whose data persists (the localStorage contract, a ready-to-use template, the shipping checklist) and how to publish/update/share + handle breaking data-shape changes. Read this before writing or updating an artefact's HTML.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return {
+          content: [
+            { type: "text" as const, text: await loadAuthoringGuide() },
+          ],
+        };
+      } catch {
+        // The guide file is missing/unreadable — fall back to the compact
+        // contract the server already advertises rather than erroring out, so
+        // the model still gets the rules that matter.
+        return fail(
+          "The full authoring guide is unavailable. Follow the persistence contract in the connector's instructions: persist only via localStorage (one versioned JSON key), wrap every read/write in try/catch with an in-memory fallback, stay under 5 MB, and debounce frequent writes.",
+        );
+      }
+    },
   );
 }

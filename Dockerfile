@@ -44,11 +44,15 @@ ENV NODE_ENV=production \
     DATABASE_PATH=/data/artefactor.db \
     ARTEFACTOR_PAYLOAD_DIR=/data/payloads \
     CLIENT_DIR=/app/dist/client \
-    MIGRATIONS_DIR=/app/migrations
+    MIGRATIONS_DIR=/app/migrations \
+    AUTHORING_GUIDE_PATH=/app/skills/artefactor/SKILL.md
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/infra/db/migrations ./migrations
+# The authoring skill is served at runtime by the MCP `get_authoring_guide` tool
+# (S18) — it is NOT bundled into dist, so it must be copied into the image.
+COPY --from=build /app/skills ./skills
 COPY --from=build /app/package.json ./package.json
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

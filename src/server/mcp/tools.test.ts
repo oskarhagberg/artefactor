@@ -74,12 +74,33 @@ describe("MCP artefact tools (S18)", () => {
         "archive_artefact",
         "create_artefact",
         "get_artefact",
+        "get_authoring_guide",
         "list_artefacts",
         "restore_artefact",
         "set_visibility",
         "update_artefact",
       ].sort(),
     );
+  });
+
+  it("advertises the persistence contract as server instructions", async () => {
+    const client = await clientFor("u1");
+    const instructions = client.getInstructions();
+    expect(instructions).toBeTruthy();
+    expect(instructions).toMatch(/localStorage/);
+    expect(instructions).toMatch(/get_authoring_guide/);
+  });
+
+  it("get_authoring_guide returns the full skill body", async () => {
+    const client = await clientFor("u1");
+    const r = await call(client, "get_authoring_guide", {});
+    expect(r.isError).toBeFalsy();
+    const text = r.content[0]!.text;
+    // The frontmatter is stripped; the body's heading and the persistence
+    // section come through.
+    expect(text.startsWith("---")).toBe(false);
+    expect(text).toMatch(/# Building and publishing artefacts for Artefactor/);
+    expect(text).toMatch(/Persisting data \(localStorage\)/);
   });
 
   it("create_artefact creates a private artefact owned by the caller", async () => {

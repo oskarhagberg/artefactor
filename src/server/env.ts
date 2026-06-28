@@ -9,6 +9,14 @@ const schema = z.object({
   ARTEFACTOR_PAYLOAD_DIR: z.string().min(1).default("./data/payloads"),
   MIGRATIONS_DIR: z.string().min(1).default("./src/infra/db/migrations"),
   CLIENT_DIR: z.string().min(1).default("./dist/client"),
+  // The authoring skill surfaced through the MCP connector (S18) — Claude design
+  // can use the connector but cannot load Agent Skills, so `get_authoring_guide`
+  // serves this file's body. Must point at a file present in the runtime image
+  // (the Dockerfile copies `skills/` for exactly this).
+  AUTHORING_GUIDE_PATH: z
+    .string()
+    .min(1)
+    .default("./skills/artefactor/SKILL.md"),
   // Git commit the image was built from; stamped by the Docker build-arg in CI
   // (see .github/workflows/deploy.yml) and surfaced at GET /health.
   GIT_SHA: z.string().min(1).default("dev"),

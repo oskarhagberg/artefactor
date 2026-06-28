@@ -33,6 +33,9 @@ the user** (OAuth), so everything you create is owned by them. Tools:
   **`dataAuthorCount`** — how many users have saved data in this artefact.
 - **`set_visibility`** / **`archive_artefact`** / **`restore_artefact`** — manage sharing and
   lifecycle.
+- **`get_authoring_guide`** — returns this guide. If you're working through the connector
+  without this skill loaded (e.g. in Claude design), call it before writing artefact HTML to
+  get the persistence contract, template, and checklist below.
 
 **Typical flow:** write the HTML following the persistence rules below → `create_artefact` →
 share via `set_visibility` (or by passing `visibility`). When the user says "update the X
