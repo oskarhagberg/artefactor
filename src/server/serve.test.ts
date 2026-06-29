@@ -153,13 +153,19 @@ describe("serve artefact by slug (S6)", () => {
     expect(body).toContain('"writable":false');
   });
 
-  it("serves an authenticated artefact to signed-in users but not the anonymous", async () => {
+  it("serves a 'Members' (authenticated) artefact to signed-in users; redirects the anonymous to sign in", async () => {
     const a = await makeArtefact("authenticated");
     expect((await get(a.publicSlug!, otherCookie)).status).toBe(200);
-    expect((await get(a.publicSlug!)).status).toBe(404);
+    // Anonymous (e.g. an org member who hasn't created their account yet) is
+    // sent to sign in with a returnTo pointing back at this artefact — not 404.
+    const anon = await get(a.publicSlug!);
+    expect(anon.status).toBe(302);
+    expect(anon.headers.get("location")).toBe(
+      `/?returnTo=${encodeURIComponent(`/a/${a.publicSlug}`)}`,
+    );
   });
 
-  it("serves a private artefact only to its owner", async () => {
+  it("serves a private artefact only to its owner (other signed-in → 404, anonymous → sign-in)", async () => {
     // Share to mint a slug, then unshare so it is private but addressable.
     const shared = await makeArtefact("public");
     await app.request(`/api/artefacts/${shared.id}/visibility`, {
@@ -169,15 +175,21 @@ describe("serve artefact by slug (S6)", () => {
     });
     const slug = shared.publicSlug!;
     expect((await get(slug, ownerCookie)).status).toBe(200);
+    // A signed-in non-owner is denied with a flat 404 (no redirect loop, no leak).
     expect((await get(slug, otherCookie)).status).toBe(404);
-    expect((await get(slug)).status).toBe(404);
+    // Anonymous is redirected to sign in (uniform with an unknown slug, so the
+    // existence of a private artefact is never revealed — AH8).
+    expect((await get(slug)).status).toBe(302);
   });
 
-  it("returns 404 for an unknown slug", async () => {
-    expect((await get("does-not-exist")).status).toBe(404);
+  it("redirects an anonymous unknown slug to sign in, but 404s an authenticated one (no existence leak)", async () => {
+    // Uniform anonymous redirect: an attacker can't tell a missing slug from a
+    // real-but-gated one. A signed-in user gets the honest 404.
+    expect((await get("does-not-exist")).status).toBe(302);
+    expect((await get("does-not-exist", otherCookie)).status).toBe(404);
   });
 
-  it("returns 404 for an archived artefact even to its owner (AH7)", async () => {
+  it("returns 404 for an archived artefact to its owner; anonymous still bounced to sign-in (AH7)", async () => {
     const a = await makeArtefact("public");
     const slug = a.publicSlug!;
     // Archive directly via the repo (archive endpoint is S7).
@@ -189,7 +201,9 @@ describe("serve artefact by slug (S6)", () => {
     const stored = (await repo.findById(a.id))!;
     await repo.save({ ...stored, status: "archived", archivedAt: new Date() });
 
+    // The owner is authenticated → honest 404 (archived is inert, even to them).
     expect((await get(slug, ownerCookie)).status).toBe(404);
-    expect((await get(slug)).status).toBe(404);
+    // Anonymous → sign-in redirect, indistinguishable from any other miss.
+    expect((await get(slug)).status).toBe(302);
   });
 });

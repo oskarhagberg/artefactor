@@ -30,6 +30,19 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
 
+  // A gated artefact link (e.g. a "Members" artefact opened by someone without
+  // an account) redirects here as `/?returnTo=/a/<slug>`. Capture it before the
+  // auth_error cleanup below strips the query, and honour only same-origin
+  // internal paths (guard against open redirects). After a successful sign-in
+  // we send the user back there so they land on the artefact they came for.
+  function readReturnTo(): string | null {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("returnTo");
+    if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+    return null;
+  }
+  const returnTo = readReturnTo();
+
   // A failed Google sign-in (e.g. an account outside the allowed email domains,
   // blocked by the server-side allowlist) bounces back here via errorCallbackURL.
   // Surface the real reason BetterAuth reports rather than assuming the cause.
@@ -49,8 +62,10 @@
     busy = true;
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
-      errorCallbackURL: "/?auth_error=1",
+      callbackURL: returnTo ?? "/",
+      errorCallbackURL: returnTo
+        ? `/?auth_error=1&returnTo=${encodeURIComponent(returnTo)}`
+        : "/?auth_error=1",
     });
     // On success the browser is redirected to Google; this line is only reached
     // if the redirect didn't start.
@@ -67,6 +82,7 @@
         : await signIn.email({ email, password });
     busy = false;
     if (res.error) error = res.error.message ?? "Authentication failed";
+    else if (returnTo) window.location.href = returnTo;
     else password = "";
   }
 

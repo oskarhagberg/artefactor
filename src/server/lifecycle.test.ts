@@ -111,7 +111,9 @@ describe("edit + archive/restore (S3, S7)", () => {
       expect(await listTitles(owner)).not.toContain("Lifecycle");
       expect(await listTitles(owner, true)).toContain("Lifecycle");
       expect((await app.request(`/api/artefacts/${a.id}`, { headers: { cookie: owner } })).status).toBe(404);
-      expect((await app.request(`/a/${slug}`)).status).toBe(404);
+      // Archived ⇒ not served. An anonymous viewer is bounced to sign-in (302),
+      // uniform with any other miss; the artefact is no longer rendered (≠ 200).
+      expect((await app.request(`/a/${slug}`)).status).toBe(302);
 
       const restored = await post(`/api/artefacts/${a.id}/restore`, owner);
       expect(restored.status).toBe(200);

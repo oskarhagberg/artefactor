@@ -50,9 +50,10 @@ Aggregate root. The consistency boundary for one hosted artefact.
    thereafter immutable and **retained** for the life of the artefact — including across
    `unshare`/`share` cycles. Re-sharing reuses the same slug.
 6. **Slug uniqueness**: slugs are globally unique.
-7. **Archived is inert**: an `archived` artefact is **not served** (any view/slug request
-   returns 404), is hidden from default listings, and cannot be edited or have its
-   visibility changed until restored. Its data entries are likewise inert.
+7. **Archived is inert**: an `archived` artefact is **not served** (a signed-in view/slug
+   request returns 404; an unauthenticated one is redirected to sign-in like any other miss —
+   still never served, see the matrix), is hidden from default listings, and cannot be edited
+   or have its visibility changed until restored. Its data entries are likewise inert.
 8. **Access by visibility** *(active artefacts; see matrix below)*: `private` → owner only;
    `selected` → owner + any user in `sharedWith`; `authenticated` → any signed-in user;
    `public` → anyone, no auth.
@@ -65,7 +66,8 @@ Aggregate root. The consistency boundary for one hosted artefact.
     entries.
 12. **Selected ⟹ slug**: `selected` is a shared tier — it mints a slug on the first share
     and retains it exactly like `authenticated`/`public` (subsumed by AH4/AH5). The slug
-    link is live only for the owner and members; everyone else gets a flat 404.
+    link is live only for the owner and members; a signed-in non-member gets a flat 404, and
+    an unauthenticated visitor is redirected to sign-in (see the matrix).
 13. **Access-list retention**: `sharedWith` is retained verbatim across every visibility
     transition (including `unshare` to `private`) and across `archive`/`restore`. It is only
     *consulted* while `visibility = selected`; an empty `sharedWith` under `selected` means
@@ -79,13 +81,25 @@ Aggregate root. The consistency boundary for one hosted artefact.
 
 | visibility | owner | member (in `sharedWith`) | other signed-in user | unauthenticated |
 |------------|-------|--------------------------|----------------------|-----------------|
-| `private` | view + edit | — | 404 | 404 |
-| `selected` | view + edit | view | 404 | 404 (login required) |
-| `authenticated` | view + edit | view | view | 404 (login required) |
+| `private` | view + edit | — | 404 | → sign-in |
+| `selected` | view + edit | view | 404 | → sign-in |
+| `authenticated` | view + edit | view | view | → sign-in |
 | `public` | view + edit | view | view | view |
 
-Archived artefacts return 404 to everyone (including the owner's public-style view); the
-owner reaches them only via the "Your artefacts" archived filter to restore them.
+**`→ sign-in`** = the unauthenticated visitor is redirected (`302` to `/?returnTo=<artefact
+path>`), not shown the artefact. After they authenticate they are re-evaluated against this
+matrix and bounced back to the artefact — so e.g. an org member who has not yet created their
+account can open a `Members` (`authenticated`) link instead of hitting a dead 404. A
+**signed-in** viewer who is denied still gets a flat `404`.
+
+**No existence leak (AH8 holds):** the sign-in redirect is **uniform across every
+unauthenticated miss** — unknown slug, `private`, `selected`, `authenticated`, and archived all
+redirect identically — so an anonymous probe still cannot tell an existing artefact from a
+missing one. Authenticated denials are a flat `404` for the same reason.
+
+Archived artefacts are never served: a signed-in viewer (the owner included) gets `404`, an
+unauthenticated one is redirected to sign-in like any other miss. The owner reaches an archived
+artefact only via the "Your artefacts" archived filter to restore it.
 
 ## State / transitions
 

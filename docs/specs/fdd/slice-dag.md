@@ -189,13 +189,18 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - **Serving route** `GET /a/:slug` (`routes/serve.ts`) — its own `attachSession` (it lives
   outside `/api`), resolves the slug via `repo.findBySlug`, applies the matrix, and on allow
   streams the trusted HTML **as-is** via `c.html` (`text/html; charset=UTF-8`, no
-  sanitization). Every deny — unknown slug, archived, wrong-tier — is a flat `404` so
-  visibility is never leaked. Mounted in `app.ts` **before** the static/SPA fallback.
+  sanitization). On deny it splits by whether the viewer is authenticated: a **signed-in**
+  viewer who is denied (unknown slug, archived, wrong-tier) gets a flat `404`; an
+  **unauthenticated** viewer is redirected (`302` → `/?returnTo=<path>`) to sign in and then
+  bounced back to the artefact (so a `Members` link works for an org member who has no account
+  yet). The redirect is **uniform across every unauthenticated miss**, so existence is still
+  never leaked (AH8). Mounted in `app.ts` **before** the static/SPA fallback.
 - **Adapters** lifted to `src/server/adapters.ts` (one Drizzle repo + filesystem payload
   store) so the API routes and the serving route share a single composition root.
 - **Tests:** access-matrix unit test (the full grid incl. archived) + an end-to-end serving
-  test (public→anyone, authenticated→signed-in only, private→owner only, unknown slug→404,
-  archived→404 even for the owner).
+  test (public→anyone, authenticated→signed-in only, private→owner only; signed-in deny →404
+  incl. archived for the owner; unauthenticated deny →`302` sign-in redirect with `returnTo`,
+  uniform for unknown slug / private / archived so existence isn't leaked).
 
 ### S7 — Archive / restore — **done** *(shipped with S3)*
 - Archive hides + un-serves the artefact and its data, sets `archivedAt`. *(AH 7)*

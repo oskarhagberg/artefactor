@@ -34,6 +34,18 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
     const viewerId = c.get("user")?.id ?? null;
 
     if (!artefact || !canViewArtefact(artefact, viewerId)) {
+      // An anonymous visitor who can't (yet) see it — e.g. a "Members"
+      // (`authenticated`) link opened by someone in the org who hasn't created
+      // their account yet — is sent to sign in and then bounced back to this
+      // artefact, instead of a dead 404. The redirect is uniform across every
+      // anonymous miss (unknown slug, private, members-only, archived), so it
+      // leaks no more than the old flat 404 did: an anonymous prober still
+      // can't distinguish an existing artefact from a missing one (AH8). An
+      // *authenticated* viewer who is denied stays a flat 404 — they already
+      // have an account, so a sign-in redirect would only loop.
+      if (viewerId === null) {
+        return c.redirect(`/?returnTo=${encodeURIComponent(c.req.path)}`, 302);
+      }
       return c.notFound();
     }
 
