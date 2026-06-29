@@ -35,7 +35,18 @@
   const session = useSession();
 
   // ---- view / control state ----
-  let view = $state<"dashboard" | "gallery">("dashboard");
+  // Remember the active tab (Your artefacts ↔ Shared with you) across reloads —
+  // a full refresh otherwise always dropped back to "Your artefacts". Stored in
+  // the admin SPA's own localStorage (not an artefact's hijacked store).
+  const VIEW_KEY = "artefactor:view";
+  function initialView(): "dashboard" | "gallery" {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "gallery" ? "gallery" : "dashboard";
+    } catch {
+      return "dashboard";
+    }
+  }
+  let view = $state<"dashboard" | "gallery">(initialView());
   let density = $state<"grid" | "list">("grid");
   let kindFilter = $state<"all" | ArtefactKind>("all");
   // Orthogonal to kindFilter: narrow by visibility/access tier (S16+).
@@ -98,6 +109,15 @@
       loadOwned();
       loadArchived();
       loadShared();
+    }
+  });
+
+  // Persist the active tab so a refresh restores it (see VIEW_KEY above).
+  $effect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* storage unavailable — the tab choice just won't persist */
     }
   });
 
