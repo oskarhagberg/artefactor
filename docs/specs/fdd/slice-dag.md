@@ -484,6 +484,25 @@ flagged (see S18).
   with `ddd/artefact-data.md`, the tools in `src/server/mcp/`, and the `instructions` summary in
   `src/server/mcp/authoring-guide.ts` — same no-drift rule as specs).
 
+### S19 — Payload-retention seam + data version pin *(enabler; behaviour-preserving)*
+The single core change that makes artefact **history / rollback** buildable by a superset,
+without adding versioning to OSS. (DDD amendments: `ddd/artefact-hosting.md` AH15,
+`ddd/artefact-data.md` AD9.)
+- **Hosting — retention seam.** Replace the unconditional delete of the superseded payload in
+  `edit-artefact.command.ts` with a **`PayloadRetentionPolicy`** port. OSS wires the default
+  `DiscardSupersededPayload` (deletes — **byte-identical behaviour**); the seam is the one place
+  a superset swaps in a retaining policy. The artefact still has exactly one head payload. *(AH 15)*
+- **Data — version pin.** `DataEntry` gains `authoredAgainstVersion`; every `PUT …/data/me`
+  stamps it with the artefact's current payload content hash. Advisory only — opacity and the
+  read/write access rules are unchanged. *(AD 9)*
+- **Acceptance:** edit still leaves exactly one payload file under the default policy (no orphan,
+  no retained file); a fresh data write records the current payload hash; an entry written before
+  a subsequent edit reads back a pin ≠ the new hash (the staleness signal); permanent delete still
+  erases payload + data, and the policy is given the chance to purge anything it retained.
+- **Boundary:** this slice is **OSS** (the seam must live where the deletion does). The retaining
+  policy, the version store, and rollback are the **EE** *Artefact History* context — see
+  `ee/docs/specs/`. Migration adds the nullable `authoredAgainstVersion` column.
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
@@ -492,4 +511,6 @@ S4 single-artefact read and the S10 owner list). S10 can land early (right after
 S2) to give a working surface to iterate against. The data-store branch (S11–S13) is
 independent of the sharing branch and can proceed in parallel once S2 exists. ~~S8/S9~~ (API
 keys) and ~~S17~~ (data merge-patch) are dropped — see the DAG note. S18 is the programmatic
-surface.
+surface. **S19** (retention seam + data pin) depends only on **S3** (the edit/replace path) and
+**S11** (`DataEntry`); it is behaviour-preserving in OSS and is the sole core dependency of the
+EE *Artefact History* context.

@@ -155,3 +155,35 @@ seeded writable; any other author is read-only (AD5).
 - **Cross-user viewing is a host feature**, not an artefact capability: a host user-picker
   loads another author's data **read-only** by re-seeding the artefact. The artefact never
   knows whose data it holds.
+
+## Amendment (post-v0.2) — payload version pin
+
+> **Status:** DDD amendment (FDD slice **S19**). A small **additive** field on `DataEntry` —
+> harmless in OSS, and the hook a superset's rollback uses to judge data compatibility. It does
+> not weaken opacity.
+
+**Problem.** A `DataEntry.blob` is shaped by whatever artefact payload was live when it was
+written. When the payload later changes shape — edited in place, or (in the superset) rolled
+back — previously-saved data may no longer match. The backend can't fix this (the blob is
+opaque, AD8), but it *can* record **which payload version the data was written against** so the
+host can detect the mismatch.
+
+**Field.** `DataEntry` gains:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `authoredAgainstVersion` | ContentHash \| null | The artefact's **payload content hash** at the moment of the (upsert) write. `null` for entries written before this field existed. Opaque — it names a payload, never describes the blob. |
+
+**AD9 — pin on write.** Every `PUT …/data/me` sets `authoredAgainstVersion` to the artefact's
+*current* payload content hash. It is **advisory metadata only**: it never gates a read or write
+(AD3–AD5 unchanged) and the backend still never interprets the blob (AD8 holds).
+
+**Use.**
+- **OSS:** even with a single mutable payload, the host can tell whether a viewer's saved data
+  **predates the current payload** (pin ≠ current hash) — a sharper form of the `dataAuthorCount`
+  breaking-change signal already exposed to the MCP connector.
+- **Superset (history / rollback):** before serving an old or rolled-back version, compare the
+  seeded entry's pin to the target version to decide whether the data is compatible (seed it, or
+  warn / seed cautiously). This is the **pin-for-compatibility** decision — there is deliberately
+  **no co-snapshot of data and no data time-travel** (continuous per-write data is a different
+  cadence from discrete payload versions; out of scope).

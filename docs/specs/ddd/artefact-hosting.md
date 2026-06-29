@@ -157,3 +157,37 @@ The data entries themselves are modelled in `artefact-data.md`.
 ## Open questions
 
 _None at the context level. Slice-local details are in the FDD spec._
+
+## Amendment (post-v0.2) — payload retention is a seam
+
+> **Status:** DDD amendment (FDD slice **S19**). Introduces an extensibility **seam without
+> changing OSS behaviour**. A superset can swap the policy to retain prior payloads and offer
+> rollback; OSS keeps a single mutable payload.
+
+**Problem.** `edit` replaces `htmlPayload` wholesale (a full replacement, not a patch). Today
+the **superseded** payload file is **deleted immediately** after a successful save, so no
+history can exist. That one deletion is all that stands between "single mutable payload" and
+"rollback".
+
+**Seam.** Disposal of a superseded payload is delegated to a **`PayloadRetentionPolicy`** port,
+consulted whenever a newly-stored payload displaces the previous one (on **edit**, and on a
+superset's **rollback**):
+
+- `onPayloadSuperseded({ artefactId, superseded, replacement, by, at })` — given the displaced
+  payload descriptor (ref + content hash + bytes), decides its fate.
+- **OSS default = `DiscardSupersededPayload`**: deletes the file — **byte-identical to today**.
+  OSS still has exactly one payload per artefact, so **this amendment does not introduce
+  versioning into OSS** (the v0.2 "Versioning: none" decision stands). The seam is the single
+  disposal point, so no other core code changes.
+- A **retaining** implementation (closed superset) keeps the displaced payload and records it
+  as a historical version (see the EE *Artefact History* context).
+
+**AH15 — retention is invisible to the core.** Under any policy the `Artefact` aggregate is
+unchanged: it has exactly one *current* `htmlPayload` (ref + hash + bytes) as its **head**.
+Retained prior payloads, if any, live **outside** this aggregate and are never consulted by the
+access matrix, serving, or listing. Permanent delete (AH11) must still erase everything — the
+retention policy is responsible for purging any payloads it retained for the artefact.
+
+**Content addressing.** `HtmlPayload` already carries a `sha256` content hash. That hash is the
+natural, stable **version identity** a retaining policy uses, and it lets an identical payload
+(e.g. a rollback re-applying an earlier version) **dedupe** to the same stored blob.
