@@ -35,23 +35,43 @@
   const session = useSession();
 
   // ---- view / control state ----
-  // Remember the active tab (Your artefacts ↔ Shared with you) across reloads —
-  // a full refresh otherwise always dropped back to "Your artefacts". Stored in
-  // the admin SPA's own localStorage (not an artefact's hijacked store).
-  const VIEW_KEY = "artefactor:view";
-  function initialView(): "dashboard" | "gallery" {
+  // Remember the dashboard's view controls across reloads — a full refresh
+  // otherwise dropped every choice back to its default. Stored in the admin
+  // SPA's own localStorage (not an artefact's hijacked store). Each value is
+  // validated on read so a stale/unknown stored key falls back to its default.
+  const STORE_PREFIX = "artefactor:";
+  function restore<T extends string>(
+    key: string,
+    allowed: readonly T[],
+    fallback: T,
+  ): T {
     try {
-      return localStorage.getItem(VIEW_KEY) === "gallery" ? "gallery" : "dashboard";
+      const v = localStorage.getItem(STORE_PREFIX + key);
+      return v !== null && (allowed as readonly string[]).includes(v)
+        ? (v as T)
+        : fallback;
     } catch {
-      return "dashboard";
+      return fallback;
     }
   }
-  let view = $state<"dashboard" | "gallery">(initialView());
-  let density = $state<"grid" | "list">("grid");
-  let kindFilter = $state<"all" | ArtefactKind>("all");
+
+  // The active tab (Your artefacts ↔ Shared with you).
+  let view = $state<"dashboard" | "gallery">(
+    restore("view", ["dashboard", "gallery"], "dashboard"),
+  );
+  let density = $state<"grid" | "list">(
+    restore("density", ["grid", "list"], "grid"),
+  );
+  let kindFilter = $state<"all" | ArtefactKind>(
+    restore<"all" | ArtefactKind>("kind", ["all", ...KIND_ORDER], "all"),
+  );
   // Orthogonal to kindFilter: narrow by visibility/access tier (S16+).
-  let accessFilter = $state<"all" | Visibility>("all");
-  let sort = $state<"updated" | "title" | "size">("updated");
+  let accessFilter = $state<"all" | Visibility>(
+    restore<"all" | Visibility>("access", ["all", ...VIS_ORDER], "all"),
+  );
+  let sort = $state<"updated" | "title" | "size">(
+    restore("sort", SORTS, "updated"),
+  );
   let query = $state("");
   let archivedOpen = $state(true);
 
@@ -112,12 +132,18 @@
     }
   });
 
-  // Persist the active tab so a refresh restores it (see VIEW_KEY above).
+  // Persist the dashboard's view controls so a refresh restores them (see
+  // STORE_PREFIX / restore above). Reading all five here re-runs the effect
+  // whenever any one changes.
   $effect(() => {
     try {
-      localStorage.setItem(VIEW_KEY, view);
+      localStorage.setItem(STORE_PREFIX + "view", view);
+      localStorage.setItem(STORE_PREFIX + "density", density);
+      localStorage.setItem(STORE_PREFIX + "kind", kindFilter);
+      localStorage.setItem(STORE_PREFIX + "access", accessFilter);
+      localStorage.setItem(STORE_PREFIX + "sort", sort);
     } catch {
-      /* storage unavailable — the tab choice just won't persist */
+      /* storage unavailable — the choices just won't persist */
     }
   });
 
