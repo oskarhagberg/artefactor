@@ -6,9 +6,17 @@ import type { StoredPayload } from "./ports";
 // Invariant AH2: payload size cap.
 export const MAX_PAYLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 
+// S22 (AH17) — the tenant an artefact belongs to. OSS is single-tenant *by being
+// one deployment*, so every artefact carries this well-known default and it never
+// discriminates; a multi-tenant superset stamps the creator's org instead and
+// scopes queries by it. Behaviour-preserving here: all OSS rows share DEFAULT_TENANT.
+export const DEFAULT_TENANT = "default";
+
 export interface Artefact {
   id: string;
   ownerId: string;
+  // S22/AH17 — the owning tenant. Immutable; set at create. OSS: DEFAULT_TENANT.
+  tenantId: string;
   title: string;
   kind: ArtefactKind;
   visibility: Visibility;
@@ -36,6 +44,9 @@ export interface CreateArtefactInput {
   title: string;
   kind: ArtefactKind;
   payload: StoredPayload;
+  // S22/AH17 — the owning tenant. Optional so OSS callers omit it (defaults to
+  // DEFAULT_TENANT); a multi-tenant superset passes the creator's active org.
+  tenantId?: string;
   // Computed by the command from the raw payload bytes (AH16). Optional so
   // tests/fixtures can omit it; defaults to false.
   usesStorage?: boolean;
@@ -63,6 +74,7 @@ export function createArtefact(input: CreateArtefactInput): Artefact {
   return {
     id: input.id,
     ownerId: input.ownerId,
+    tenantId: input.tenantId ?? DEFAULT_TENANT, // AH17
     title,
     kind: input.kind,
     visibility: "private",

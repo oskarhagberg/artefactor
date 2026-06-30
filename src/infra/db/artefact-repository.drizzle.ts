@@ -173,6 +173,7 @@ function toRow(a: Artefact): ArtefactRow {
   return {
     id: a.id,
     ownerId: a.ownerId,
+    tenantId: a.tenantId,
     title: a.title,
     kind: a.kind,
     visibility: a.visibility,
@@ -192,6 +193,7 @@ function toAggregate(row: ArtefactRow, sharedWith: string[]): Artefact {
   return {
     id: row.id,
     ownerId: row.ownerId,
+    tenantId: row.tenantId,
     title: row.title,
     kind: row.kind,
     visibility: row.visibility,

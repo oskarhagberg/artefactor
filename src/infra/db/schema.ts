@@ -200,6 +200,9 @@ export const artefact = sqliteTable(
     ownerId: text("owner_id")
       .notNull()
       .references(() => user.id),
+    // S22/AH17 — owning tenant. OSS is single-tenant: every row is DEFAULT_TENANT
+    // and it never discriminates. A superset stamps the creator's org + scopes by it.
+    tenantId: text("tenant_id").notNull().default("default"),
     title: text("title").notNull(),
     kind: text("kind", {
       enum: ["prototype", "slide-deck", "form", "interactive-doc", "other"],

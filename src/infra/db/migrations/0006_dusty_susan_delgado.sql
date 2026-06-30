@@ -1,0 +1,1 @@
+ALTER TABLE `artefact` ADD `tenant_id` text DEFAULT 'default' NOT NULL;

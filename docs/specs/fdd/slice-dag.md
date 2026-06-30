@@ -568,6 +568,10 @@ chrome. (New DDD bounded context: `ddd/artefact-views.md`, invariants VT1–VT5;
 Two thin core seams that let a superset be **multi-tenant**, byte-identical in OSS. (DDD amendments:
 `ddd/artefact-hosting.md` AH17/AH18, `ddd/identity-access.md` IA5. EE context:
 `ee/docs/specs/ddd/tenancy.md`.)
+> **Progress:** **A1 done** — `Artefact.tenantId` + the `tenant_id` column (both schemas, migration
+> `0006`) default to `DEFAULT_TENANT` and are stamped at create; behaviour-preserving (never filtered
+> on yet). **Pending:** A2 (scope-aware `ArtefactRepository` — the read-method signature change),
+> the `AccessPolicy` port (whose shape depends on A2), and the open-signup allowlist option.
 - **Scope.** `Artefact` gains `tenantId` (immutable; migration defaults existing + new rows to
   `DEFAULT_TENANT`). `ArtefactRepository` list/find take a **`TenantScope`**; OSS wires the singleton
   scope, so listing/serving is unchanged. Subordinate reads (data, views, versions) inherit the
