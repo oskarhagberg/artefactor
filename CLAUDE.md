@@ -2,13 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: All defined v0.2 slices are built — new work means defining new slices
+## Status: v0.2 shipped; post-v0.2 adds behaviour-preserving enabler seams
 
-Every slice in `docs/specs/fdd/slice-dag.md` is **done** (S0–S7, S10–S16, S18; **S8/S9/S17
-dropped**) — the Artefact Hosting and Artefact Data contexts and the MCP connector are all
-complete and the client UI is built. There is **no slice currently "in progress"**: the v0.2
-DAG is exhausted, so the next piece of work starts by **adding a new slice** to the DAG (and its
-governing DDD invariant) before coding, per the spec-driven process below.
+The v0.2 feature slices are **done** (S0–S7, S10–S16, S18, **S20**, **S21**; **S8/S9/S17
+dropped**) — the Artefact Hosting and Artefact Data contexts, the MCP connector, and the client
+UI are complete. **Post-v0.2 the DAG also defines *enabler seams*: behaviour-preserving extension
+points that let a closed superset extend the core without forking it** (each ships an OSS default
+that keeps OSS behaviour byte-identical). **S24** (inject persistence ports into the composition)
+is **done**; **S19** (payload-retention seam), **S22** (tenant scope + access-policy), and **S23**
+(quota / payload-size / branding policies) are **specced but not yet implemented**. New work
+either implements a pending enabler seam or adds a new slice (with its governing DDD invariant)
+before coding, per the spec-driven process below.
 
 **The whole Artefact Hosting context plus the Artefact Data store *and its localStorage
 runtime + host data-context switcher* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10,

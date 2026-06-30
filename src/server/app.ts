@@ -2,18 +2,16 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { env } from "./env";
-import {
-  artefactRepository,
-  dataRepository,
-  payloadStore,
-  viewRepository,
-} from "./adapters";
+import { defaultAdapters, type Adapters } from "./adapters";
 import { createApiRoutes } from "./routes";
 import { createArtefactServingRoutes } from "./routes/serve";
 import { createMcpRoutes } from "./mcp/routes";
 import type { HealthResponse } from "../shared/contracts";
 
-export function createApp() {
+// S24 — the composition root. The persistence-port adapters are injected
+// (defaulting to the OSS SQLite/filesystem set), so a superset can compose the
+// same app over a different backend without editing core.
+export function createApp(adapters: Adapters = defaultAdapters) {
   const app = new Hono();
 
   app.use("*", logger());
@@ -26,17 +24,17 @@ export function createApp() {
     }),
   );
 
-  app.route("/api", createApiRoutes());
+  app.route("/api", createApiRoutes(adapters));
 
   // S6 — public artefact serving by slug (the shared-link render route). Mounted
   // before the static handlers so `/a/:slug` is not swallowed by the SPA fallback.
   app.route(
     "/a",
     createArtefactServingRoutes({
-      repo: artefactRepository,
-      payloadStore,
-      dataRepo: dataRepository,
-      viewRepo: viewRepository,
+      repo: adapters.artefactRepository,
+      payloadStore: adapters.payloadStore,
+      dataRepo: adapters.dataRepository,
+      viewRepo: adapters.viewRepository,
     }),
   );
 
@@ -47,9 +45,9 @@ export function createApp() {
   app.route(
     "/",
     createMcpRoutes({
-      repo: artefactRepository,
-      payloadStore,
-      dataRepo: dataRepository,
+      repo: adapters.artefactRepository,
+      payloadStore: adapters.payloadStore,
+      dataRepo: adapters.dataRepository,
     }),
   );
 

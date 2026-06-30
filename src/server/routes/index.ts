@@ -2,13 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "../auth";
 import { env } from "../env";
-import {
-  artefactRepository,
-  dataRepository,
-  payloadStore,
-  userDirectory,
-  viewRepository,
-} from "../adapters";
+import type { Adapters } from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
@@ -21,7 +15,16 @@ import type {
 } from "../../shared/contracts";
 
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
-export function createApiRoutes() {
+// S24 — the persistence-port adapters are injected (see `createApp`), not
+// imported as ambient singletons, so a superset can wire a different backend.
+export function createApiRoutes(adapters: Adapters) {
+  const {
+    artefactRepository,
+    dataRepository,
+    payloadStore,
+    userDirectory,
+    viewRepository,
+  } = adapters;
   const api = new Hono<AuthEnv>();
 
   // CORS for the auth endpoints so a cross-origin client (e.g. the Vite dev

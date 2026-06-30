@@ -600,7 +600,7 @@ The core seams the **EE Usage & Quota** context plugs into — all **no-op in OS
 - **Boundary:** **OSS** (the seams sit at the create/edit commands and the S12 shell). The metering,
   plan-aware policy, entitlements, and soft fences are the **EE Usage & Quota** context (EQ1–EQ5).
 
-### S24 — Inject persistence ports into the composition *(enabler; behaviour-preserving)*
+### S24 — Inject persistence ports into the composition — **done** *(enabler; behaviour-preserving)*
 Make the BFF composition accept the domain-port adapters as **injected dependencies**, so a
 superset can wire a different backend (Postgres) without forking the composition. (EE context:
 `ee/docs/specs/ddd/postgres-persistence.md`.)
