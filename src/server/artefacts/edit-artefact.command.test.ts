@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { editArtefactCommand } from "./edit-artefact.command";
 import { createArtefact } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound, InvariantViolation } from "../../domain/artefact/errors";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
 
@@ -54,7 +55,7 @@ describe("editArtefactCommand (S3)", () => {
 
   it("updates title and kind without touching the payload", async () => {
     const edited = await editArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER, title: "New", kind: "form" },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE,title: "New", kind: "form" },
       deps(),
     );
     expect(edited.title).toBe("New");
@@ -64,7 +65,7 @@ describe("editArtefactCommand (S3)", () => {
 
   it("replaces the payload and deletes the superseded file", async () => {
     const edited = await editArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER, payload: bytes("<h1>new</h1>") },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE,payload: bytes("<h1>new</h1>") },
       deps(),
     );
     expect(store.live.has(edited.payloadRef)).toBe(true);
@@ -76,19 +77,19 @@ describe("editArtefactCommand (S3)", () => {
 
   it("recomputes usesStorage on a payload edit, but not on a title-only edit (AH16)", async () => {
     // Initial payload has no storage usage.
-    const start = await repo.findById("a1");
+    const start = await repo.findById("a1", SCOPE);
     expect(start!.usesStorage).toBe(false);
 
     // Replacing with localStorage-using HTML flips it on.
     const withStorage = await editArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER, payload: bytes("<script>localStorage.x=1</script>") },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE,payload: bytes("<script>localStorage.x=1</script>") },
       deps(),
     );
     expect(withStorage.usesStorage).toBe(true);
 
     // A title-only edit leaves the flag untouched.
     const titled = await editArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER, title: "Renamed" },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE,title: "Renamed" },
       deps(),
     );
     expect(titled.usesStorage).toBe(true);
@@ -97,7 +98,7 @@ describe("editArtefactCommand (S3)", () => {
   it("leaves no orphan and keeps the old payload when the edit is rejected", async () => {
     await expect(
       editArtefactCommand(
-        { artefactId: "a1", requesterId: OWNER, title: "  ", payload: bytes("x") },
+        { artefactId: "a1", requesterId: OWNER, scope: SCOPE,title: "  ", payload: bytes("x") },
         deps(),
       ),
     ).rejects.toBeInstanceOf(InvariantViolation);
@@ -108,7 +109,7 @@ describe("editArtefactCommand (S3)", () => {
   it("rejects a non-owner as not-found (AH8)", async () => {
     await expect(
       editArtefactCommand(
-        { artefactId: "a1", requesterId: "intruder", title: "x" },
+        { artefactId: "a1", requesterId: "intruder", scope: SCOPE, title: "x" },
         deps(),
       ),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
@@ -117,7 +118,7 @@ describe("editArtefactCommand (S3)", () => {
   it("rejects an unknown kind", async () => {
     await expect(
       editArtefactCommand(
-        { artefactId: "a1", requesterId: OWNER, kind: "spreadsheet" },
+        { artefactId: "a1", requesterId: OWNER, scope: SCOPE,kind: "spreadsheet" },
         deps(),
       ),
     ).rejects.toBeInstanceOf(InvariantViolation);

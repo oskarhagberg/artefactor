@@ -10,6 +10,7 @@ import {
   MAX_PAYLOAD_BYTES,
 } from "./artefact";
 import { InMemoryArtefactRepository } from "./in-memory-artefact-repository";
+import { SINGLETON_SCOPE } from "./tenant-scope";
 import { InvariantViolation } from "./errors";
 
 const base = {
@@ -198,11 +199,11 @@ describe("InMemoryArtefactRepository", () => {
   it("persists and retrieves an artefact by id", async () => {
     const repo = new InMemoryArtefactRepository();
     await repo.save(createArtefact(base));
-    expect(await repo.findById("a1")).toMatchObject({
+    expect(await repo.findById("a1", SINGLETON_SCOPE)).toMatchObject({
       id: "a1",
       title: "Demo artefact",
     });
-    expect(await repo.findById("missing")).toBeNull();
+    expect(await repo.findById("missing", SINGLETON_SCOPE)).toBeNull();
   });
 
   describe("listByOwner (S10)", () => {
@@ -220,7 +221,7 @@ describe("InMemoryArtefactRepository", () => {
       };
       await repo.save(archived);
 
-      const list = await repo.listByOwner("u1");
+      const list = await repo.listByOwner("u1", SINGLETON_SCOPE);
       expect(list.map((a) => a.id)).toEqual(["new", "old"]);
     });
 
@@ -231,7 +232,9 @@ describe("InMemoryArtefactRepository", () => {
         ...createArtefact({ ...base, id: "arch" }),
         status: "archived" as const,
       });
-      const list = await repo.listByOwner("u1", { includeArchived: true });
+      const list = await repo.listByOwner("u1", SINGLETON_SCOPE, {
+        includeArchived: true,
+      });
       expect(list.map((a) => a.id).sort()).toEqual(["a1", "arch"]);
     });
   });
@@ -252,15 +255,82 @@ describe("InMemoryArtefactRepository", () => {
     it("returns active authenticated+public across owners, never private/archived", async () => {
       const repo = await seed();
       // Viewer owns none of them → sees every shared artefact across owners.
-      const shared = await repo.listShared("u3");
+      const shared = await repo.listShared("u3", SINGLETON_SCOPE);
       expect(shared.map((a) => a.id).sort()).toEqual(["auth", "pub"]);
     });
 
     it("excludes the viewer's own shared artefacts (they live in Your artefacts)", async () => {
       const repo = await seed();
       // u1 owns "pub" → it drops out; only u2's "auth" remains.
-      const shared = await repo.listShared("u1");
+      const shared = await repo.listShared("u1", SINGLETON_SCOPE);
       expect(shared.map((a) => a.id).sort()).toEqual(["auth"]);
+    });
+  });
+
+  // S22 (AH17/T2) — the read methods are tenant-scoped. OSS uses the singleton
+  // scope (every row is DEFAULT_TENANT), so these prove the *seam*: a stub
+  // multi-tenant scope never returns another tenant's rows. `findBySlug` is
+  // deliberately global (AH6) and is asserted to stay cross-tenant.
+  describe("tenant scope (S22)", () => {
+    const TENANT_A = { tenantId: "org-a" };
+    const TENANT_B = { tenantId: "org-b" };
+
+    const seedTwoTenants = async () => {
+      const repo = new InMemoryArtefactRepository();
+      await repo.save({
+        ...createArtefact({ ...base, id: "a-priv", tenantId: "org-a" }),
+      });
+      await repo.save({
+        ...createArtefact({ ...base, id: "a-shared", tenantId: "org-a" }),
+        visibility: "authenticated",
+        publicSlug: "slug-a",
+      });
+      await repo.save({
+        ...createArtefact({
+          ...base,
+          id: "b-priv",
+          ownerId: "u2",
+          tenantId: "org-b",
+        }),
+      });
+      await repo.save({
+        ...createArtefact({
+          ...base,
+          id: "b-shared",
+          ownerId: "u2",
+          tenantId: "org-b",
+        }),
+        visibility: "authenticated",
+        publicSlug: "slug-b",
+      });
+      return repo;
+    };
+
+    it("findById returns null for an out-of-scope artefact", async () => {
+      const repo = await seedTwoTenants();
+      expect(await repo.findById("a-priv", TENANT_A)).not.toBeNull();
+      expect(await repo.findById("a-priv", TENANT_B)).toBeNull();
+    });
+
+    it("listByOwner excludes other-tenant artefacts", async () => {
+      const repo = await seedTwoTenants();
+      const inA = await repo.listByOwner("u1", TENANT_A);
+      expect(inA.map((a) => a.id).sort()).toEqual(["a-priv", "a-shared"]);
+      // u1 owns nothing in org-b's scope.
+      expect(await repo.listByOwner("u1", TENANT_B)).toEqual([]);
+    });
+
+    it("listShared only returns artefacts within the scope's tenant", async () => {
+      const repo = await seedTwoTenants();
+      // A viewer scoped to org-b sees only org-b's shared artefact, not org-a's.
+      const shared = await repo.listShared("viewer", TENANT_B);
+      expect(shared.map((a) => a.id)).toEqual(["b-shared"]);
+    });
+
+    it("findBySlug stays global (AH6) — a slug resolves across tenants", async () => {
+      const repo = await seedTwoTenants();
+      expect((await repo.findBySlug("slug-a"))?.id).toBe("a-shared");
+      expect((await repo.findBySlug("slug-b"))?.id).toBe("b-shared");
     });
   });
 });

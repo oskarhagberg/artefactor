@@ -4,6 +4,7 @@ import { ARTEFACT_KINDS } from "../../domain/artefact/kind";
 import { VISIBILITIES } from "../../domain/artefact/visibility";
 import type { Artefact } from "../../domain/artefact/artefact";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import type { PayloadStore } from "../../domain/artefact/ports";
 import type { DataRepository } from "../../domain/data/data-repository";
 import {
@@ -79,6 +80,7 @@ export function registerArtefactTools(
   server: McpServer,
   userId: string,
   deps: McpToolDeps,
+  scope: TenantScope,
 ): void {
   const { repo, payloadStore, dataRepo } = deps;
 
@@ -129,7 +131,7 @@ export function registerArtefactTools(
         // a retrying client create duplicates.) No data entries exist yet.
         try {
           const shared = await setArtefactVisibilityCommand(
-            { artefactId: created.id, requesterId: userId, visibility },
+            { artefactId: created.id, requesterId: userId, visibility, scope },
             { repo },
           );
           return summarize(shared);
@@ -164,6 +166,7 @@ export function registerArtefactTools(
           {
             artefactId: id,
             requesterId: userId,
+            scope,
             title,
             kind,
             payload: html === undefined ? undefined : new TextEncoder().encode(html),
@@ -186,7 +189,7 @@ export function registerArtefactTools(
     },
     async ({ include_archived }) =>
       run(async () => {
-        const owned = await repo.listByOwner(userId, {
+        const owned = await repo.listByOwner(userId, scope, {
           includeArchived: include_archived ?? false,
         });
         return { artefacts: owned.map(summarize) };
@@ -203,7 +206,11 @@ export function registerArtefactTools(
     },
     async ({ id }) =>
       run(async () => {
-        const a = await loadOwnActiveArtefact(repo, { id, ownerId: userId });
+        const a = await loadOwnActiveArtefact(repo, {
+          id,
+          ownerId: userId,
+          scope,
+        });
         return withDataCount(a);
       }),
   );
@@ -222,7 +229,7 @@ export function registerArtefactTools(
     async ({ id, visibility }) =>
       run(async () => {
         const updated = await setArtefactVisibilityCommand(
-          { artefactId: id, requesterId: userId, visibility },
+          { artefactId: id, requesterId: userId, visibility, scope },
           { repo },
         );
         return summarize(updated);
@@ -239,7 +246,7 @@ export function registerArtefactTools(
     async ({ id }) =>
       run(async () => {
         const updated = await archiveArtefactCommand(
-          { artefactId: id, requesterId: userId },
+          { artefactId: id, requesterId: userId, scope },
           { repo },
         );
         return summarize(updated);
@@ -256,7 +263,7 @@ export function registerArtefactTools(
     async ({ id }) =>
       run(async () => {
         const updated = await restoreArtefactCommand(
-          { artefactId: id, requesterId: userId },
+          { artefactId: id, requesterId: userId, scope },
           { repo },
         );
         return summarize(updated);

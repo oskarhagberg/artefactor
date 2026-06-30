@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { canViewArtefact } from "../../domain/artefact/access";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import {
   upsertDataEntry,
   type DataEntry,
@@ -34,10 +35,13 @@ export async function resolveViewableArtefact(
   deps: DataAccessDeps,
   ref: string,
   viewerId: string | null,
+  scope: TenantScope,
 ) {
+  // The slug form is a global capability (AH6); the id fallback is tenant-scoped
+  // (S22/T2), so an out-of-scope artefact can't be reached by guessing its id.
   const artefact =
     (await deps.artefactRepo.findBySlug(ref)) ??
-    (await deps.artefactRepo.findById(ref));
+    (await deps.artefactRepo.findById(ref, scope));
   if (!artefact || !canViewArtefact(artefact, viewerId)) {
     throw new ArtefactNotFound(ref);
   }
@@ -47,6 +51,7 @@ export async function resolveViewableArtefact(
 export interface OwnDataRef {
   ref: string; // artefact slug or id
   authorId: string; // the authenticated caller
+  scope: TenantScope; // the caller's tenant scope (S22/AH17)
 }
 
 // GET own entry — returns the caller's entry, or null if they have none yet.
@@ -54,7 +59,12 @@ export async function getOwnDataEntry(
   ref: OwnDataRef,
   deps: OwnDataDeps,
 ): Promise<DataEntry | null> {
-  const artefact = await resolveViewableArtefact(deps, ref.ref, ref.authorId);
+  const artefact = await resolveViewableArtefact(
+    deps,
+    ref.ref,
+    ref.authorId,
+    ref.scope,
+  );
   return deps.dataRepo.findByArtefactAndAuthor(artefact.id, ref.authorId);
 }
 
@@ -64,7 +74,12 @@ export async function putOwnDataEntry(
   blob: string,
   deps: OwnDataDeps,
 ): Promise<DataEntry> {
-  const artefact = await resolveViewableArtefact(deps, ref.ref, ref.authorId);
+  const artefact = await resolveViewableArtefact(
+    deps,
+    ref.ref,
+    ref.authorId,
+    ref.scope,
+  );
   const existing = await deps.dataRepo.findByArtefactAndAuthor(
     artefact.id,
     ref.authorId,
@@ -86,6 +101,11 @@ export async function deleteOwnDataEntry(
   ref: OwnDataRef,
   deps: OwnDataDeps,
 ): Promise<void> {
-  const artefact = await resolveViewableArtefact(deps, ref.ref, ref.authorId);
+  const artefact = await resolveViewableArtefact(
+    deps,
+    ref.ref,
+    ref.authorId,
+    ref.scope,
+  );
   await deps.dataRepo.deleteByArtefactAndAuthor(artefact.id, ref.authorId);
 }

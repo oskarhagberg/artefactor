@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { loadOwnActiveArtefact } from "./get-own-artefact";
 import { createArtefact } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 
 const OWNER = "owner-1";
@@ -22,19 +23,19 @@ describe("loadOwnActiveArtefact (S4)", () => {
   });
 
   it("returns the owner's own active artefact", async () => {
-    const a = await loadOwnActiveArtefact(repo, { id: "a1", ownerId: OWNER });
+    const a = await loadOwnActiveArtefact(repo, { id: "a1", ownerId: OWNER, scope: SCOPE });
     expect(a.id).toBe("a1");
   });
 
   it("rejects a non-owner as not-found (AH8)", async () => {
     await expect(
-      loadOwnActiveArtefact(repo, { id: "a1", ownerId: "intruder" }),
+      loadOwnActiveArtefact(repo, { id: "a1", ownerId: "intruder", scope: SCOPE }),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
   it("rejects an unknown id as not-found", async () => {
     await expect(
-      loadOwnActiveArtefact(repo, { id: "missing", ownerId: OWNER }),
+      loadOwnActiveArtefact(repo, { id: "missing", ownerId: OWNER, scope: SCOPE }),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
@@ -50,7 +51,7 @@ describe("loadOwnActiveArtefact (S4)", () => {
       status: "archived",
     });
     await expect(
-      loadOwnActiveArtefact(repo, { id: "arch", ownerId: OWNER }),
+      loadOwnActiveArtefact(repo, { id: "arch", ownerId: OWNER, scope: SCOPE }),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 });

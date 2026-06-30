@@ -31,6 +31,7 @@ import type { DataRepository } from "../../domain/data/data-repository";
 import type { ViewRepository } from "../../domain/views/view-repository";
 import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
+import type { TenantScopeResolver } from "../middleware/tenant-scope";
 import type {
   AccessListResponse,
   ArtefactListResponse,
@@ -46,6 +47,8 @@ export type ArtefactRoutesDeps = CreateArtefactDeps & {
   dataRepo: DataRepository;
   viewRepo: ViewRepository;
   userDirectory: UserDirectory;
+  // S22 (AH17) — resolves the request's tenant scope for the owner-scoped reads.
+  resolveScope: TenantScopeResolver;
 };
 
 // BFF routes for the Artefact Hosting context. S2 adds manual HTML upload;
@@ -60,7 +63,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
     // `?archived=true` returns the owner's archived artefacts (the "Your
     // artefacts" archived view, used to restore them in S7); otherwise active only.
     const archived = c.req.query("archived") === "true";
-    const owned = await deps.repo.listByOwner(ownerId(c), {
+    const owned = await deps.repo.listByOwner(ownerId(c), await deps.resolveScope(c), {
       includeArchived: archived,
     });
     const artefacts = archived
@@ -79,6 +82,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
       const artefact = await loadOwnActiveArtefact(deps.repo, {
         id: c.req.param("id"),
         ownerId: ownerId(c),
+        scope: await deps.resolveScope(c),
       });
       return c.json<ArtefactSummary>(toArtefactSummary(artefact));
     } catch (err) {
@@ -97,6 +101,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
       const artefact = await loadOwnActiveArtefact(deps.repo, {
         id: c.req.param("id"),
         ownerId: ownerId(c),
+        scope: await deps.resolveScope(c),
       });
       return c.html(
         renderHostShell({
@@ -127,6 +132,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
       const artefact = await loadOwnActiveArtefact(deps.repo, {
         id: c.req.param("id"),
         ownerId: ownerId(c),
+        scope: await deps.resolveScope(c),
       });
       const html = await renderServedArtefact(
         artefact,
@@ -156,7 +162,12 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
     }
     try {
       const updated = await setArtefactVisibilityCommand(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c), visibility },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          visibility,
+          scope: await deps.resolveScope(c),
+        },
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));
@@ -176,7 +187,11 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   r.get("/:id/access", requireAuth, async (c) => {
     try {
       const memberIds = await listAccessMembers(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          scope: await deps.resolveScope(c),
+        },
         { repo: deps.repo },
       );
       const identities = await deps.userDirectory.lookup(memberIds);
@@ -209,7 +224,12 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
         return c.json({ error: "unknown user" }, 400);
       }
       await grantAccessCommand(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c), userId },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          userId,
+          scope: await deps.resolveScope(c),
+        },
         { repo: deps.repo },
       );
       return c.body(null, 204);
@@ -228,6 +248,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
           artefactId: c.req.param("id"),
           requesterId: ownerId(c),
           userId: c.req.param("userId"),
+          scope: await deps.resolveScope(c),
         },
         { repo: deps.repo },
       );
@@ -247,6 +268,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
     const input: EditArtefactInput = {
       artefactId: c.req.param("id"),
       requesterId: ownerId(c),
+      scope: await deps.resolveScope(c),
     };
     if (typeof body.title === "string") input.title = body.title;
     if (typeof body.kind === "string") input.kind = body.kind;
@@ -270,7 +292,11 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   r.post("/:id/archive", requireAuth, async (c) => {
     try {
       const updated = await archiveArtefactCommand(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          scope: await deps.resolveScope(c),
+        },
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));
@@ -285,7 +311,11 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   r.post("/:id/restore", requireAuth, async (c) => {
     try {
       const updated = await restoreArtefactCommand(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          scope: await deps.resolveScope(c),
+        },
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));
@@ -302,7 +332,11 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   r.delete("/:id", requireAuth, async (c) => {
     try {
       await deleteArtefactCommand(
-        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        {
+          artefactId: c.req.param("id"),
+          requesterId: ownerId(c),
+          scope: await deps.resolveScope(c),
+        },
         {
           repo: deps.repo,
           dataRepo: deps.dataRepo,

@@ -7,6 +7,7 @@ import { InvariantViolation } from "../../domain/artefact/errors";
 import { isArtefactKind } from "../../domain/artefact/kind";
 import { payloadUsesStorage } from "../../domain/artefact/uses-storage";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import type { PayloadStore } from "../../domain/artefact/ports";
 import { loadOwnActiveArtefact } from "./get-own-artefact";
 
@@ -19,6 +20,7 @@ import { loadOwnActiveArtefact } from "./get-own-artefact";
 export interface EditArtefactInput {
   artefactId: string;
   requesterId: string;
+  scope: TenantScope; // the caller's tenant scope (S22/AH17)
   title?: string;
   kind?: string;
   payload?: Uint8Array; // raw HTML bytes, when replacing the payload
@@ -36,6 +38,7 @@ export async function editArtefactCommand(
   const existing = await loadOwnActiveArtefact(deps.repo, {
     id: input.artefactId,
     ownerId: input.requesterId,
+    scope: input.scope,
   });
 
   if (input.kind !== undefined && !isArtefactKind(input.kind)) {

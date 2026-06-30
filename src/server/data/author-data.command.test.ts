@@ -9,6 +9,7 @@ import {
 } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 
 const OWNER = "owner-1";
@@ -47,44 +48,44 @@ describe("author-data commands — host data-context switcher (S12)", () => {
 
   it("lists every author who has an entry, with freshness (AD4)", async () => {
     await seed("authenticated");
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"v":1}', deps);
-    await putOwnDataEntry({ ref: "slug1", authorId: OTHER }, '{"v":2}', deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"v":1}', deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: OTHER, scope: SCOPE }, '{"v":2}', deps);
 
-    const authors = await listDataAuthors("slug1", OWNER, deps);
+    const authors = await listDataAuthors("slug1", OWNER, SCOPE, deps);
     expect(authors.map((a) => a.authorId).sort()).toEqual([OWNER, OTHER].sort());
     expect(authors.every((a) => a.updatedAt instanceof Date)).toBe(true);
   });
 
   it("loads another author's blob for a viewer with read access (AD4)", async () => {
     await seed("authenticated");
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"who":"owner"}', deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"who":"owner"}', deps);
     // A different signed-in viewer can load the owner's entry (read-only seed).
-    const entry = await getAuthorDataEntry("slug1", OTHER, OWNER, deps);
+    const entry = await getAuthorDataEntry("slug1", OTHER, OWNER, SCOPE, deps);
     expect(entry?.blob).toBe('{"who":"owner"}');
   });
 
   it("returns null when the requested author has no entry", async () => {
     await seed("authenticated");
-    expect(await getAuthorDataEntry("slug1", OWNER, OTHER, deps)).toBeNull();
+    expect(await getAuthorDataEntry("slug1", OWNER, OTHER, SCOPE, deps)).toBeNull();
   });
 
   it("lets an unauthenticated viewer read a public artefact's authors (AD4)", async () => {
     await seed("public");
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"v":1}', deps);
-    const authors = await listDataAuthors("slug1", null, deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"v":1}', deps);
+    const authors = await listDataAuthors("slug1", null, SCOPE, deps);
     expect(authors.map((a) => a.authorId)).toEqual([OWNER]);
-    expect((await getAuthorDataEntry("slug1", null, OWNER, deps))?.blob).toBe(
+    expect((await getAuthorDataEntry("slug1", null, OWNER, SCOPE, deps))?.blob).toBe(
       '{"v":1}',
     );
   });
 
   it("hides an authenticated artefact's authors from the anonymous (AD4)", async () => {
     await seed("authenticated");
-    await expect(listDataAuthors("slug1", null, deps)).rejects.toBeInstanceOf(
+    await expect(listDataAuthors("slug1", null, SCOPE, deps)).rejects.toBeInstanceOf(
       ArtefactNotFound,
     );
     await expect(
-      getAuthorDataEntry("slug1", null, OWNER, deps),
+      getAuthorDataEntry("slug1", null, OWNER, SCOPE, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
@@ -92,20 +93,20 @@ describe("author-data commands — host data-context switcher (S12)", () => {
     const shared = await seed("public");
     await artefactRepo.save({ ...shared, visibility: "private" });
     await expect(
-      listDataAuthors("slug1", OTHER, deps),
+      listDataAuthors("slug1", OTHER, SCOPE, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     // Owner still reaches it.
-    await expect(listDataAuthors("slug1", OWNER, deps)).resolves.toBeDefined();
+    await expect(listDataAuthors("slug1", OWNER, SCOPE, deps)).resolves.toBeDefined();
   });
 
   it("is not-found for an archived artefact (AD6)", async () => {
     const shared = await seed("authenticated");
     await artefactRepo.save(archiveArtefact(shared));
     await expect(
-      listDataAuthors("slug1", OWNER, deps),
+      listDataAuthors("slug1", OWNER, SCOPE, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     await expect(
-      getAuthorDataEntry("slug1", OWNER, OWNER, deps),
+      getAuthorDataEntry("slug1", OWNER, OWNER, SCOPE, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 });

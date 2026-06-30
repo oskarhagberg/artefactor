@@ -6,6 +6,7 @@ import type {
   ArtefactRepository,
   ListByOwnerOptions,
 } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 
 type Database = typeof Db;
 type ArtefactRow = typeof artefact.$inferSelect;
@@ -36,11 +37,12 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
     await this.db.delete(artefact).where(eq(artefact.id, id));
   }
 
-  async findById(id: string): Promise<Artefact | null> {
+  async findById(id: string, scope: TenantScope): Promise<Artefact | null> {
+    // Tenant-scoped (S22/AH17, T2): a row in another tenant is invisible.
     const [row] = await this.db
       .select()
       .from(artefact)
-      .where(eq(artefact.id, id))
+      .where(and(eq(artefact.id, id), eq(artefact.tenantId, scope.tenantId)))
       .limit(1);
     return row ? toAggregate(row, await this.granteesOf(id)) : null;
   }
@@ -56,12 +58,19 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
 
   async listByOwner(
     ownerId: string,
+    scope: TenantScope,
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]> {
+    // Tenant-scoped: the dashboard shows only the active org's artefacts (ET4).
+    const tenant = eq(artefact.tenantId, scope.tenantId);
     const where =
       options?.includeArchived === true
-        ? eq(artefact.ownerId, ownerId)
-        : and(eq(artefact.ownerId, ownerId), eq(artefact.status, "active"));
+        ? and(tenant, eq(artefact.ownerId, ownerId))
+        : and(
+            tenant,
+            eq(artefact.ownerId, ownerId),
+            eq(artefact.status, "active"),
+          );
     const rows = await this.db
       .select()
       .from(artefact)
@@ -72,11 +81,14 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
     return rows.map((r) => toAggregate(r, grantees.get(r.id) ?? []));
   }
 
-  async listShared(viewerId: string): Promise<Artefact[]> {
-    // Cross-owner, active, excluding the viewer's own. `authenticated`/`public`
-    // match outright; a `selected` artefact matches only when the viewer is a
-    // member (via the `artefact_access` subquery). Uses the (status, visibility)
-    // index + the user_id index on the join table.
+  async listShared(
+    viewerId: string,
+    scope: TenantScope,
+  ): Promise<Artefact[]> {
+    // Cross-owner, active, **within the tenant scope**, excluding the viewer's
+    // own. `authenticated`/`public` match outright; a `selected` artefact matches
+    // only when the viewer is a member (via the `artefact_access` subquery). Uses
+    // the (status, visibility) index + the user_id index on the join table.
     const memberArtefactIds = this.db
       .select({ id: artefactAccess.artefactId })
       .from(artefactAccess)
@@ -86,6 +98,7 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .from(artefact)
       .where(
         and(
+          eq(artefact.tenantId, scope.tenantId),
           eq(artefact.status, "active"),
           ne(artefact.ownerId, viewerId),
           or(

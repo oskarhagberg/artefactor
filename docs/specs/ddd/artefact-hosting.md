@@ -235,9 +235,16 @@ access matrix or the repository.
 **Seam (a) — tenant scope.**
 - `Artefact` gains **`tenantId`** (immutable, set at create). OSS default = a single well-known
   tenant (`DEFAULT_TENANT`), so every row shares one tenant and behaviour is byte-identical.
-- `ArtefactRepository` list/find operations become **scope-aware**: they take a **`TenantScope`** and
-  never return rows outside it (subordinate data/view/version reads inherit the scope). OSS passes
-  the singleton scope (no behavioural change); a superset passes the caller's org(s).
+- `ArtefactRepository` list/find operations become **scope-aware**: `findById`, `listByOwner`, and
+  `listShared` take a **`TenantScope`** and never return rows outside it (subordinate data/view/version
+  reads inherit the scope). **`findBySlug` is the deliberate exception — it stays tenant-global**,
+  because a slug is a globally-unique capability (AH6): it is the cross-tenant address for public/link
+  serving and the mint-time uniqueness check. The per-tier tenant decision for a slug-served artefact
+  is the `AccessPolicy`'s (seam b), not the scope's. OSS passes the singleton scope (no behavioural
+  change); a superset passes the caller's **active org** (a single tenant per request, not an org-set —
+  it maps 1:1 onto the Postgres RLS `SET LOCAL app.tenant_id` backstop). The scope is resolved per
+  request by an injected `TenantScopeResolver` (OSS default = the singleton), so a superset overrides
+  *which* tenant a request sees without editing core route handlers.
 
 **Seam (b) — access policy.**
 - The access-matrix decision (who may view an artefact) is delegated to an **`AccessPolicy`** port.

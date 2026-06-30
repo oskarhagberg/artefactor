@@ -1,13 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerArtefactTools, type McpToolDeps } from "./tools";
 import { PERSISTENCE_CONTRACT_SUMMARY } from "./authoring-guide";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 
 export type { McpToolDeps } from "./tools";
 
 // S18 — build a per-request MCP server bound to one authenticated Account. The
 // server is stateless and short-lived: created on each `POST /mcp` after the
 // bearer is resolved to a `userId`, so every tool acts as that user.
-export function buildMcpServer(userId: string, deps: McpToolDeps): McpServer {
+//
+// S22 (AH17) — `scope` is the Account's tenant scope; OSS passes the singleton
+// (byte-identical). A superset resolves it from the token Account's active org.
+export function buildMcpServer(
+  userId: string,
+  deps: McpToolDeps,
+  scope: TenantScope,
+): McpServer {
   const server = new McpServer(
     {
       name: "artefactor",
@@ -21,6 +29,6 @@ export function buildMcpServer(userId: string, deps: McpToolDeps): McpServer {
       instructions: PERSISTENCE_CONTRACT_SUMMARY,
     },
   );
-  registerArtefactTools(server, userId, deps);
+  registerArtefactTools(server, userId, deps, scope);
   return server;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createArtefactCommand } from "./create-artefact.command";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
+import { SINGLETON_SCOPE } from "../../domain/artefact/tenant-scope";
 import { InvariantViolation } from "../../domain/artefact/errors";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
 
@@ -46,7 +47,7 @@ describe("createArtefactCommand (S2)", () => {
     expect(a.payloadBytes).toBe(html.byteLength);
 
     // Persisted and payload retained.
-    expect(await d.repo.findById(a.id)).toMatchObject({ id: a.id });
+    expect(await d.repo.findById(a.id, SINGLETON_SCOPE)).toMatchObject({ id: a.id });
     expect(d.payloadStore.live.size).toBe(1);
   });
 

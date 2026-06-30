@@ -2,6 +2,7 @@ import type { Artefact } from "../../domain/artefact/artefact";
 import { grantAccess, revokeAccess } from "../../domain/artefact/access-list";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 
 // Application commands for S16 — manage the `selected`-tier access list. The
 // owner adds/removes individual members; access is consulted only while the
@@ -13,6 +14,7 @@ export interface ManageAccessInput {
   artefactId: string;
   requesterId: string; // the authenticated user making the request
   userId: string; // the user being granted / revoked
+  scope: TenantScope; // the caller's tenant scope (S22/AH17)
 }
 
 export interface ManageAccessDeps {
@@ -24,7 +26,7 @@ async function loadOwned(
   input: ManageAccessInput,
   deps: ManageAccessDeps,
 ): Promise<Artefact> {
-  const existing = await deps.repo.findById(input.artefactId);
+  const existing = await deps.repo.findById(input.artefactId, input.scope);
   if (!existing || existing.ownerId !== input.requesterId) {
     throw new ArtefactNotFound(input.artefactId);
   }
@@ -56,7 +58,7 @@ export async function revokeAccessCommand(
 // Read the current member ids for the owner's artefact (powers the manage-access
 // panel). Non-owner / unknown → not-found, like the mutating commands.
 export async function listAccessMembers(
-  input: { artefactId: string; requesterId: string },
+  input: { artefactId: string; requesterId: string; scope: TenantScope },
   deps: ManageAccessDeps,
 ): Promise<string[]> {
   const existing = await loadOwned(

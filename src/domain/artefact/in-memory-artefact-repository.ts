@@ -3,6 +3,7 @@ import type {
   ArtefactRepository,
   ListByOwnerOptions,
 } from "./artefact-repository";
+import type { TenantScope } from "./tenant-scope";
 
 // In-memory implementation of the ArtefactRepository port. This is the primary
 // TDD test double for domain slices (S2+) — no database required.
@@ -17,12 +18,15 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
     this.store.delete(id);
   }
 
-  async findById(id: string): Promise<Artefact | null> {
+  async findById(id: string, scope: TenantScope): Promise<Artefact | null> {
     const found = this.store.get(id);
-    return found ? { ...found } : null;
+    // Outside the scope's tenant the row is invisible (S22/AH17, T2).
+    if (!found || found.tenantId !== scope.tenantId) return null;
+    return { ...found };
   }
 
   async findBySlug(slug: string): Promise<Artefact | null> {
+    // Global by design — a slug is a tenant-agnostic capability (AH6).
     for (const a of this.store.values()) {
       if (a.publicSlug === slug) return { ...a };
     }
@@ -31,12 +35,14 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
 
   async listByOwner(
     ownerId: string,
+    scope: TenantScope,
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]> {
     const includeArchived = options?.includeArchived ?? false;
     return [...this.store.values()]
       .filter(
         (a) =>
+          a.tenantId === scope.tenantId &&
           a.ownerId === ownerId &&
           (includeArchived || a.status === "active"),
       )
@@ -44,10 +50,14 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
       .map((a) => ({ ...a }));
   }
 
-  async listShared(viewerId: string): Promise<Artefact[]> {
+  async listShared(
+    viewerId: string,
+    scope: TenantScope,
+  ): Promise<Artefact[]> {
     return [...this.store.values()]
       .filter(
         (a) =>
+          a.tenantId === scope.tenantId &&
           a.status === "active" &&
           a.ownerId !== viewerId &&
           (a.visibility === "authenticated" ||

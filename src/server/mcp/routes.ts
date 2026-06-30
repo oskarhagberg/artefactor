@@ -7,6 +7,21 @@ import {
 import { env } from "../env";
 import type { AuthInstance } from "../middleware/auth";
 import { buildMcpServer, type McpToolDeps } from "./server";
+import {
+  SINGLETON_SCOPE,
+  type TenantScope,
+} from "../../domain/artefact/tenant-scope";
+
+// S22 (AH17) — resolve the tenant scope a connector request runs under from its
+// resolved MCP session (the token Account). OSS maps every Account to the single
+// tenant (byte-identical); a superset reads the Account's active org (ET2 — an
+// open question in `ddd/identity-access.md`). Injected like the other seams so
+// the superset overrides it without editing this route.
+export type McpScopeResolver = (session: {
+  userId: string;
+}) => TenantScope | Promise<TenantScope>;
+
+const singletonMcpScopeResolver: McpScopeResolver = () => SINGLETON_SCOPE;
 
 // S18 — MCP connector endpoints, mounted at the app root (NOT under /api) so
 // they sit at the URLs an MCP client probes: the OAuth discovery descriptors at
@@ -14,7 +29,11 @@ import { buildMcpServer, type McpToolDeps } from "./server";
 // (authorize/consent/token/register) is served by the BetterAuth handler under
 // `/api/auth/*` via the `mcp` plugin; these root routes are the discovery
 // surface plus the bearer-guarded tool endpoint.
-export function createMcpRoutes(deps: McpToolDeps, auth: AuthInstance) {
+export function createMcpRoutes(
+  deps: McpToolDeps,
+  auth: AuthInstance,
+  resolveScope: McpScopeResolver = singletonMcpScopeResolver,
+) {
   const r = new Hono();
 
   // Discovery — better-auth renders the metadata; we just expose it at the root
@@ -37,7 +56,8 @@ export function createMcpRoutes(deps: McpToolDeps, auth: AuthInstance) {
         "WWW-Authenticate": `Bearer resource_metadata="${env.BETTER_AUTH_URL}/.well-known/oauth-protected-resource"`,
       });
     }
-    const server = buildMcpServer(session.userId, deps);
+    const scope = await resolveScope({ userId: session.userId });
+    const server = buildMcpServer(session.userId, deps, scope);
     // Stateless (no sessionIdGenerator): a fresh server per request, so each
     // POST is handled independently — no session store, no init handshake to
     // remember. `enableJsonResponse` returns a single JSON-RPC reply (we have no

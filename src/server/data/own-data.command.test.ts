@@ -13,6 +13,7 @@ import {
 } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 import { InvalidBlob } from "../../domain/data/errors";
 
@@ -51,38 +52,38 @@ describe("own-data commands (S11)", () => {
 
   it("upserts and reads back the caller's own blob (AD1)", async () => {
     await seed();
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"v":1}', deps);
-    const got = await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"v":1}', deps);
+    const got = await getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps);
     expect(got?.blob).toBe('{"v":1}');
 
     // Second write upserts the same entry.
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"v":2}', deps);
-    expect((await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps))?.blob).toBe(
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"v":2}', deps);
+    expect((await getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps))?.blob).toBe(
       '{"v":2}',
     );
   });
 
   it("keeps each author's entry separate on a shared artefact (AD2)", async () => {
     await seed("authenticated");
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, '{"who":"owner"}', deps);
-    await putOwnDataEntry({ ref: "slug1", authorId: "user-2" }, '{"who":"two"}', deps);
-    expect((await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps))?.blob).toBe(
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, '{"who":"owner"}', deps);
+    await putOwnDataEntry({ ref: "slug1", authorId: "user-2", scope: SCOPE }, '{"who":"two"}', deps);
+    expect((await getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps))?.blob).toBe(
       '{"who":"owner"}',
     );
-    expect((await getOwnDataEntry({ ref: "slug1", authorId: "user-2" }, deps))?.blob).toBe(
+    expect((await getOwnDataEntry({ ref: "slug1", authorId: "user-2", scope: SCOPE }, deps))?.blob).toBe(
       '{"who":"two"}',
     );
   });
 
   it("returns null when the caller has no entry yet", async () => {
     await seed();
-    expect(await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps)).toBeNull();
+    expect(await getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps)).toBeNull();
   });
 
   it("rejects an invalid blob (AD8)", async () => {
     await seed();
     await expect(
-      putOwnDataEntry({ ref: "slug1", authorId: OWNER }, "not json", deps),
+      putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, "not json", deps),
     ).rejects.toBeInstanceOf(InvalidBlob);
   });
 
@@ -90,10 +91,10 @@ describe("own-data commands (S11)", () => {
     const shared = await seed();
     await artefactRepo.save(archiveArtefact(shared));
     await expect(
-      putOwnDataEntry({ ref: "slug1", authorId: OWNER }, "{}", deps),
+      putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, "{}", deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     await expect(
-      getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps),
+      getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
@@ -102,17 +103,17 @@ describe("own-data commands (S11)", () => {
     const shared = await seed("public");
     await artefactRepo.save({ ...shared, visibility: "private" });
     await expect(
-      putOwnDataEntry({ ref: "slug1", authorId: "intruder" }, "{}", deps),
+      putOwnDataEntry({ ref: "slug1", authorId: "intruder", scope: SCOPE }, "{}", deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     // The owner can still write their own.
     await expect(
-      putOwnDataEntry({ ref: "slug1", authorId: OWNER }, "{}", deps),
+      putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, "{}", deps),
     ).resolves.toBeDefined();
   });
 
   it("is not-found for an unknown slug", async () => {
     await expect(
-      getOwnDataEntry({ ref: "nope", authorId: OWNER }, deps),
+      getOwnDataEntry({ ref: "nope", authorId: OWNER, scope: SCOPE }, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
@@ -127,20 +128,20 @@ describe("own-data commands (S11)", () => {
         payload: { ref: "r", bytes: 10, hash: "h" },
       }),
     );
-    await putOwnDataEntry({ ref: "never-shared", authorId: OWNER }, '{"v":1}', deps);
+    await putOwnDataEntry({ ref: "never-shared", authorId: OWNER, scope: SCOPE }, '{"v":1}', deps);
     expect(
-      (await getOwnDataEntry({ ref: "never-shared", authorId: OWNER }, deps))?.blob,
+      (await getOwnDataEntry({ ref: "never-shared", authorId: OWNER, scope: SCOPE }, deps))?.blob,
     ).toBe('{"v":1}');
     // A non-owner cannot reach it even with the id.
     await expect(
-      getOwnDataEntry({ ref: "never-shared", authorId: "intruder" }, deps),
+      getOwnDataEntry({ ref: "never-shared", authorId: "intruder", scope: SCOPE }, deps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
   it("deletes the caller's entry", async () => {
     await seed();
-    await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, "{}", deps);
-    await deleteOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps);
-    expect(await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps)).toBeNull();
+    await putOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, "{}", deps);
+    await deleteOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps);
+    expect(await getOwnDataEntry({ ref: "slug1", authorId: OWNER, scope: SCOPE }, deps)).toBeNull();
   });
 });

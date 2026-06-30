@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildMcpServer, type McpToolDeps } from "./server";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
+import { SINGLETON_SCOPE } from "../../domain/artefact/tenant-scope";
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
 import { upsertDataEntry } from "../../domain/data/data-entry";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
@@ -48,7 +49,7 @@ describe("MCP artefact tools (S18)", () => {
 
   // A connected MCP client acting as `userId` against the shared deps.
   async function clientFor(userId: string): Promise<Client> {
-    const server = buildMcpServer(userId, deps);
+    const server = buildMcpServer(userId, deps, SINGLETON_SCOPE);
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     await server.connect(serverT);
     const client = new Client({ name: "test", version: "1.0.0" });

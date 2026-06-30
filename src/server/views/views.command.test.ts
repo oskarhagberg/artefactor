@@ -13,6 +13,7 @@ import {
 } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
 import { InMemoryViewRepository } from "../../domain/views/in-memory-view-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 
 const OWNER = "owner-1";
@@ -56,7 +57,7 @@ describe("views commands (S21)", () => {
     recordDeps.now = () => at;
     await recordArtefactView("a1", "viewer-2", recordDeps);
 
-    const viewers = await listArtefactViewers("slug1", OWNER, listDeps);
+    const viewers = await listArtefactViewers("slug1", OWNER, SCOPE, listDeps);
     expect(viewers).toEqual([{ viewerId: "viewer-2", viewedAt: at }]);
   });
 
@@ -68,7 +69,7 @@ describe("views commands (S21)", () => {
     recordDeps.now = () => later;
     await recordArtefactView("a1", "viewer-2", recordDeps);
 
-    const viewers = await listArtefactViewers("slug1", OWNER, listDeps);
+    const viewers = await listArtefactViewers("slug1", OWNER, SCOPE, listDeps);
     expect(viewers).toEqual([{ viewerId: "viewer-2", viewedAt: later }]);
   });
 
@@ -78,10 +79,10 @@ describe("views commands (S21)", () => {
     await recordArtefactView("a1", "viewer-2", recordDeps);
 
     // The owner asking sees only the other viewer, never themselves.
-    const asOwner = await listArtefactViewers("slug1", OWNER, listDeps);
+    const asOwner = await listArtefactViewers("slug1", OWNER, SCOPE, listDeps);
     expect(asOwner.map((v) => v.viewerId)).toEqual(["viewer-2"]);
     // viewer-2 asking sees only the owner.
-    const asViewer = await listArtefactViewers("slug1", "viewer-2", listDeps);
+    const asViewer = await listArtefactViewers("slug1", "viewer-2", SCOPE, listDeps);
     expect(asViewer.map((v) => v.viewerId)).toEqual([OWNER]);
   });
 
@@ -89,7 +90,7 @@ describe("views commands (S21)", () => {
     const shared = await seed("authenticated");
     await artefactRepo.save(archiveArtefact(shared));
     await expect(
-      listArtefactViewers("slug1", OWNER, listDeps),
+      listArtefactViewers("slug1", OWNER, SCOPE, listDeps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
@@ -97,11 +98,11 @@ describe("views commands (S21)", () => {
     const shared = await seed("public");
     await artefactRepo.save({ ...shared, visibility: "private" });
     await expect(
-      listArtefactViewers("slug1", "intruder", listDeps),
+      listArtefactViewers("slug1", "intruder", SCOPE, listDeps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     // The owner can still read their own artefact's viewers.
     await expect(
-      listArtefactViewers("slug1", OWNER, listDeps),
+      listArtefactViewers("slug1", OWNER, SCOPE, listDeps),
     ).resolves.toBeDefined();
   });
 
@@ -116,11 +117,11 @@ describe("views commands (S21)", () => {
       }),
     );
     await recordArtefactView("never-shared", "viewer-2", recordDeps);
-    const viewers = await listArtefactViewers("never-shared", OWNER, listDeps);
+    const viewers = await listArtefactViewers("never-shared", OWNER, SCOPE, listDeps);
     expect(viewers.map((v) => v.viewerId)).toEqual(["viewer-2"]);
     // A non-owner cannot reach it even with the id.
     await expect(
-      listArtefactViewers("never-shared", "intruder", listDeps),
+      listArtefactViewers("never-shared", "intruder", SCOPE, listDeps),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 });

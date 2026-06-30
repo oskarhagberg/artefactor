@@ -5,18 +5,32 @@ import { env } from "./env";
 import { defaultAdapters, type Adapters } from "./adapters";
 import { auth as defaultAuth } from "./auth";
 import type { AuthInstance } from "./middleware/auth";
+import {
+  singletonScopeResolver,
+  type TenantScopeResolver,
+} from "./middleware/tenant-scope";
 import { createApiRoutes } from "./routes";
 import { createArtefactServingRoutes } from "./routes/serve";
-import { createMcpRoutes } from "./mcp/routes";
+import { createMcpRoutes, type McpScopeResolver } from "./mcp/routes";
 import type { HealthResponse } from "../shared/contracts";
 
 // S24 — the composition root. The persistence-port adapters *and* the BetterAuth
 // instance are injected (defaulting to the OSS SQLite/filesystem set + the
 // SQLite-backed `auth`), so a superset can compose the same app over a different
 // backend (e.g. Postgres) without editing core.
+//
+// S22 (AH17) — the tenant-scope resolver is injected the same way (default =
+// single-tenant `singletonScopeResolver`, so OSS is byte-identical). A
+// multi-tenant superset injects an active-org resolver (ET2) without editing
+// core route handlers.
 export function createApp(
   adapters: Adapters = defaultAdapters,
   auth: AuthInstance = defaultAuth,
+  resolveScope: TenantScopeResolver = singletonScopeResolver,
+  // The MCP connector resolves scope from the token Account, not a Hono request
+  // session, so it has its own resolver (default = single-tenant). See ET2's
+  // open question on the connector's active org.
+  resolveMcpScope?: McpScopeResolver,
 ) {
   const app = new Hono();
 
@@ -30,7 +44,7 @@ export function createApp(
     }),
   );
 
-  app.route("/api", createApiRoutes(adapters, auth));
+  app.route("/api", createApiRoutes(adapters, auth, resolveScope));
 
   // S6 — public artefact serving by slug (the shared-link render route). Mounted
   // before the static handlers so `/a/:slug` is not swallowed by the SPA fallback.
@@ -58,6 +72,7 @@ export function createApp(
         dataRepo: adapters.dataRepository,
       },
       auth,
+      resolveMcpScope,
     ),
   );
 

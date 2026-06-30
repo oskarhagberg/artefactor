@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { canViewArtefact } from "../../domain/artefact/access";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import { recordView } from "../../domain/views/view-entry";
 import type {
   ViewerRef,
@@ -55,9 +56,11 @@ async function resolveViewableArtefact(
   repo: ArtefactRepository,
   ref: string,
   viewerId: string | null,
+  scope: TenantScope,
 ) {
+  // Slug = global capability (AH6); id fallback is tenant-scoped (S22/T2).
   const artefact =
-    (await repo.findBySlug(ref)) ?? (await repo.findById(ref));
+    (await repo.findBySlug(ref)) ?? (await repo.findById(ref, scope));
   if (!artefact || !canViewArtefact(artefact, viewerId)) {
     throw new ArtefactNotFound(ref);
   }
@@ -70,12 +73,14 @@ async function resolveViewableArtefact(
 export async function listArtefactViewers(
   ref: string,
   viewerId: string,
+  scope: TenantScope,
   deps: ListViewersDeps,
 ): Promise<ViewerRef[]> {
   const artefact = await resolveViewableArtefact(
     deps.artefactRepo,
     ref,
     viewerId,
+    scope,
   );
   const viewers = await deps.viewRepo.listViewersByArtefact(artefact.id);
   return viewers.filter((v) => v.viewerId !== viewerId);

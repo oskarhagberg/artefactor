@@ -5,12 +5,15 @@ import type { ViewRepository } from "../../domain/views/view-repository";
 import { listArtefactViewers } from "../views/views.command";
 import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
+import type { TenantScopeResolver } from "../middleware/tenant-scope";
 import type { ArtefactViewersResponse } from "../../shared/contracts";
 
 export interface ViewRoutesDeps {
   artefactRepo: ArtefactRepository;
   viewRepo: ViewRepository;
   userDirectory: UserDirectory;
+  // S22 (AH17) — resolves the request's tenant scope for the id-fallback resolve.
+  resolveScope: TenantScopeResolver;
 }
 
 // S21 — Artefact Views. Mounted at `/api/artefacts/:ref/viewers`, where `:ref`
@@ -33,10 +36,15 @@ export function createViewRoutes(deps: ViewRoutesDeps) {
   // inside the command (missing / archived / not-viewable → 404).
   r.get("/", requireAuth, async (c) => {
     try {
-      const refs = await listArtefactViewers(refOf(c), ownerId(c), {
-        artefactRepo: deps.artefactRepo,
-        viewRepo: deps.viewRepo,
-      });
+      const refs = await listArtefactViewers(
+        refOf(c),
+        ownerId(c),
+        await deps.resolveScope(c),
+        {
+          artefactRepo: deps.artefactRepo,
+          viewRepo: deps.viewRepo,
+        },
+      );
       const identities = await deps.userDirectory.lookup(
         refs.map((v) => v.viewerId),
       );

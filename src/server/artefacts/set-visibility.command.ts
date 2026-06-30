@@ -5,6 +5,7 @@ import {
 } from "../../domain/artefact/artefact";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import type { Visibility } from "../../domain/artefact/visibility";
 import { generateSlug } from "./slug";
 
@@ -17,6 +18,7 @@ export interface SetArtefactVisibilityInput {
   artefactId: string;
   requesterId: string; // the authenticated user making the request
   visibility: Visibility;
+  scope: TenantScope; // the caller's tenant scope (S22/AH17)
 }
 
 export interface SetArtefactVisibilityDeps {
@@ -31,7 +33,7 @@ export async function setArtefactVisibilityCommand(
   input: SetArtefactVisibilityInput,
   deps: SetArtefactVisibilityDeps,
 ): Promise<Artefact> {
-  const existing = await deps.repo.findById(input.artefactId);
+  const existing = await deps.repo.findById(input.artefactId, input.scope);
   // A non-owner is told the same thing as for a missing artefact, so a private
   // artefact's existence cannot be probed (AH8/AH9).
   if (!existing || existing.ownerId !== input.requesterId) {

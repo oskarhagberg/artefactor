@@ -9,6 +9,7 @@ import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-arte
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
 import { InMemoryViewRepository } from "../../domain/views/in-memory-view-repository";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound, InvariantViolation } from "../../domain/artefact/errors";
 
 const OWNER = "owner-1";
@@ -32,19 +33,19 @@ describe("archive / restore commands (S7)", () => {
   it("archives an owned active artefact", async () => {
     await repo.save(shareArtefact(base(), { tier: "public", newSlug: "s" }));
     const archived = await archiveArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE },
       { repo },
     );
     expect(archived.status).toBe("archived");
     expect(archived.archivedAt).not.toBeNull();
-    expect((await repo.findById("a1"))?.status).toBe("archived");
+    expect((await repo.findById("a1", SCOPE))?.status).toBe("archived");
   });
 
   it("round-trips archive → restore back to the prior visibility (AH9)", async () => {
     await repo.save(shareArtefact(base(), { tier: "authenticated", newSlug: "s" }));
-    await archiveArtefactCommand({ artefactId: "a1", requesterId: OWNER }, { repo });
+    await archiveArtefactCommand({ artefactId: "a1", requesterId: OWNER, scope: SCOPE }, { repo });
     const restored = await restoreArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE },
       { repo },
     );
     expect(restored.status).toBe("active");
@@ -55,21 +56,21 @@ describe("archive / restore commands (S7)", () => {
   it("treats a non-owner archive as not-found (AH8)", async () => {
     await repo.save(base());
     await expect(
-      archiveArtefactCommand({ artefactId: "a1", requesterId: "intruder" }, { repo }),
+      archiveArtefactCommand({ artefactId: "a1", requesterId: "intruder", scope: SCOPE }, { repo }),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
   it("archiving an already-archived artefact is not-found (not active)", async () => {
     await repo.save({ ...base(), status: "archived", archivedAt: new Date() });
     await expect(
-      archiveArtefactCommand({ artefactId: "a1", requesterId: OWNER }, { repo }),
+      archiveArtefactCommand({ artefactId: "a1", requesterId: OWNER, scope: SCOPE }, { repo }),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
   });
 
   it("rejects restoring an artefact that is not archived", async () => {
     await repo.save(base());
     await expect(
-      restoreArtefactCommand({ artefactId: "a1", requesterId: OWNER }, { repo }),
+      restoreArtefactCommand({ artefactId: "a1", requesterId: OWNER, scope: SCOPE }, { repo }),
     ).rejects.toBeInstanceOf(InvariantViolation);
   });
 });
@@ -120,10 +121,10 @@ describe("delete command (S15, AH11)", () => {
   it("deletes an archived artefact, its payload, and all its data + view entries", async () => {
     await seedArchivedWithData();
     await deleteArtefactCommand(
-      { artefactId: "a1", requesterId: OWNER },
+      { artefactId: "a1", requesterId: OWNER, scope: SCOPE },
       { repo, dataRepo, viewRepo, payloadStore },
     );
-    expect(await repo.findById("a1")).toBeNull();
+    expect(await repo.findById("a1", SCOPE)).toBeNull();
     expect(payloadStore.deleted).toEqual(["r"]);
     expect(await dataRepo.findByArtefactAndAuthor("a1", OWNER)).toBeNull();
     expect(await dataRepo.findByArtefactAndAuthor("a1", "viewer-2")).toBeNull();
@@ -134,11 +135,11 @@ describe("delete command (S15, AH11)", () => {
     await repo.save(base());
     await expect(
       deleteArtefactCommand(
-        { artefactId: "a1", requesterId: OWNER },
+        { artefactId: "a1", requesterId: OWNER, scope: SCOPE },
         { repo, dataRepo, viewRepo, payloadStore },
       ),
     ).rejects.toBeInstanceOf(InvariantViolation);
-    expect(await repo.findById("a1")).not.toBeNull();
+    expect(await repo.findById("a1", SCOPE)).not.toBeNull();
     expect(payloadStore.deleted).toEqual([]);
   });
 
@@ -146,10 +147,10 @@ describe("delete command (S15, AH11)", () => {
     await repo.save({ ...base(), status: "archived", archivedAt: new Date() });
     await expect(
       deleteArtefactCommand(
-        { artefactId: "a1", requesterId: "intruder" },
+        { artefactId: "a1", requesterId: "intruder", scope: SCOPE },
         { repo, dataRepo, viewRepo, payloadStore },
       ),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
-    expect(await repo.findById("a1")).not.toBeNull();
+    expect(await repo.findById("a1", SCOPE)).not.toBeNull();
   });
 });

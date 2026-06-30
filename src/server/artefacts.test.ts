@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Hono } from "hono";
+import { SINGLETON_SCOPE } from "../domain/artefact/tenant-scope";
 import type { ArtefactSummary } from "../shared/contracts";
 
 // End-to-end S2: drive the real app — sign a user up, then POST an HTML upload
@@ -77,7 +78,10 @@ describe("create artefact (S2)", () => {
     const { DrizzleArtefactRepository } = await import(
       "../infra/db/artefact-repository.drizzle"
     );
-    const stored = await new DrizzleArtefactRepository(db).findById(body.id);
+    const stored = await new DrizzleArtefactRepository(db).findById(
+      body.id,
+      SINGLETON_SCOPE,
+    );
     expect(stored).not.toBeNull();
     expect(stored!.ownerId).toBe(body.ownerId);
     expect(stored!.visibility).toBe("private");
@@ -316,7 +320,7 @@ describe("create artefact (S2)", () => {
         "../infra/db/artefact-repository.drizzle"
       );
       const repo = new DrizzleArtefactRepository(db);
-      const stored = (await repo.findById(created.id))!;
+      const stored = (await repo.findById(created.id, SINGLETON_SCOPE))!;
       await repo.save({ ...stored, status: "archived", archivedAt: new Date() });
 
       expect(

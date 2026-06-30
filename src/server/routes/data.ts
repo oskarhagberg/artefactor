@@ -15,6 +15,7 @@ import {
 } from "../data/author-data.command";
 import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
+import type { TenantScopeResolver } from "../middleware/tenant-scope";
 import type {
   DataAuthorsResponse,
   DataEntryResponse,
@@ -24,6 +25,8 @@ export interface DataRoutesDeps {
   artefactRepo: ArtefactRepository;
   dataRepo: DataRepository;
   userDirectory: UserDirectory;
+  // S22 (AH17) — resolves the request's tenant scope for the id-fallback resolve.
+  resolveScope: TenantScopeResolver;
 }
 
 // S11 — Artefact Data: the caller's own blob. Mounted at
@@ -57,6 +60,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
       const refs = await listDataAuthors(
         refOf(c),
         c.get("user")?.id ?? null,
+        await deps.resolveScope(c),
         commandDeps,
       );
       const identities = await deps.userDirectory.lookup(
@@ -83,7 +87,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
   r.get("/me", requireAuth, async (c) => {
     try {
       const entry = await getOwnDataEntry(
-        { ref: refOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c), scope: await deps.resolveScope(c) },
         commandDeps,
       );
       return c.json<DataEntryResponse>({
@@ -101,7 +105,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
     const blob = await c.req.text();
     try {
       const entry = await putOwnDataEntry(
-        { ref: refOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c), scope: await deps.resolveScope(c) },
         blob,
         commandDeps,
       );
@@ -121,7 +125,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
   r.delete("/me", requireAuth, async (c) => {
     try {
       await deleteOwnDataEntry(
-        { ref: refOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c), scope: await deps.resolveScope(c) },
         commandDeps,
       );
       return c.body(null, 204);
@@ -140,6 +144,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
         refOf(c),
         c.get("user")?.id ?? null,
         c.req.param("authorId")!,
+        await deps.resolveScope(c),
         commandDeps,
       );
       return c.json<DataEntryResponse>({

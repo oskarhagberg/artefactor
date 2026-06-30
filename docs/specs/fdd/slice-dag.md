@@ -568,10 +568,20 @@ chrome. (New DDD bounded context: `ddd/artefact-views.md`, invariants VT1–VT5;
 Two thin core seams that let a superset be **multi-tenant**, byte-identical in OSS. (DDD amendments:
 `ddd/artefact-hosting.md` AH17/AH18, `ddd/identity-access.md` IA5. EE context:
 `ee/docs/specs/ddd/tenancy.md`.)
-> **Progress:** **A1 done** — `Artefact.tenantId` + the `tenant_id` column (both schemas, migration
-> `0006`) default to `DEFAULT_TENANT` and are stamped at create; behaviour-preserving (never filtered
-> on yet). **Pending:** A2 (scope-aware `ArtefactRepository` — the read-method signature change),
-> the `AccessPolicy` port (whose shape depends on A2), and the open-signup allowlist option.
+> **Progress:** **A1 + A2 done.** A1 — `Artefact.tenantId` + the `tenant_id` column (both schemas,
+> migration `0006`) default to `DEFAULT_TENANT` and are stamped at create. A2 — `findById`,
+> `listByOwner`, and `listShared` are now **scope-aware** (take a `TenantScope`,
+> `domain/artefact/tenant-scope.ts`); `findBySlug` stays **tenant-global** because a slug is a
+> globally-unique capability (AH6) and the per-tier tenant check for a slug-served artefact is the
+> `AccessPolicy`'s job (part B). The scope is resolved per request by an injected
+> `TenantScopeResolver` (OSS default `singletonScopeResolver` → `DEFAULT_TENANT`, byte-identical;
+> threaded through `createApp`/`createApiRoutes` + the artefact/data/view route factories + the MCP
+> `createMcpRoutes`). A `TenantScope` is a **single** tenant (the active org), not an org-set: a
+> multi-org user works within one active org per request, which also maps 1:1 onto the EP2 RLS
+> `SET LOCAL app.tenant_id`. Behaviour-preserving — all existing tests stay green; new in-memory
+> tests prove a stub multi-tenant scope excludes other-tenant rows and that `findBySlug` stays
+> cross-tenant. **Pending:** the `AccessPolicy` port (part B, whose shape depends on A2), and the
+> open-signup allowlist option (part C).
 - **Scope.** `Artefact` gains `tenantId` (immutable; migration defaults existing + new rows to
   `DEFAULT_TENANT`). `ArtefactRepository` list/find take a **`TenantScope`**; OSS wires the singleton
   scope, so listing/serving is unchanged. Subordinate reads (data, views, versions) inherit the

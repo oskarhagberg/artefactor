@@ -1,5 +1,6 @@
 import type { DataEntry } from "../../domain/data/data-entry";
 import type { DataAuthorRef } from "../../domain/data/data-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import {
   resolveViewableArtefact,
   type DataAccessDeps,
@@ -19,9 +20,10 @@ import {
 export async function listDataAuthors(
   ref: string,
   viewerId: string | null,
+  scope: TenantScope,
   deps: DataAccessDeps,
 ): Promise<DataAuthorRef[]> {
-  const artefact = await resolveViewableArtefact(deps, ref, viewerId);
+  const artefact = await resolveViewableArtefact(deps, ref, viewerId, scope);
   return deps.dataRepo.listAuthorsByArtefact(artefact.id);
 }
 
@@ -31,8 +33,9 @@ export async function getAuthorDataEntry(
   ref: string,
   viewerId: string | null,
   authorId: string,
+  scope: TenantScope,
   deps: DataAccessDeps,
 ): Promise<DataEntry | null> {
-  const artefact = await resolveViewableArtefact(deps, ref, viewerId);
+  const artefact = await resolveViewableArtefact(deps, ref, viewerId, scope);
   return deps.dataRepo.findByArtefactAndAuthor(artefact.id, authorId);
 }

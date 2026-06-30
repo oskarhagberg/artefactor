@@ -5,6 +5,7 @@ import {
   type Artefact,
 } from "../../domain/artefact/artefact";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { TenantScope } from "../../domain/artefact/tenant-scope";
 import type { DataRepository } from "../../domain/data/data-repository";
 import type { ViewRepository } from "../../domain/views/view-repository";
 import type { PayloadStore } from "../../domain/artefact/ports";
@@ -15,6 +16,7 @@ import { loadOwnActiveArtefact, loadOwnArtefact } from "./get-own-artefact";
 export interface LifecycleInput {
   artefactId: string;
   requesterId: string;
+  scope: TenantScope; // the caller's tenant scope (S22/AH17)
 }
 
 export interface LifecycleDeps {
@@ -41,6 +43,7 @@ export async function archiveArtefactCommand(
   const existing = await loadOwnActiveArtefact(deps.repo, {
     id: input.artefactId,
     ownerId: input.requesterId,
+    scope: input.scope,
   });
   const archived = archiveArtefact(existing, { now: deps.now?.() });
   await deps.repo.save(archived);
@@ -56,6 +59,7 @@ export async function restoreArtefactCommand(
   const existing = await loadOwnArtefact(deps.repo, {
     id: input.artefactId,
     ownerId: input.requesterId,
+    scope: input.scope,
   });
   const restored = restoreArtefact(existing, { now: deps.now?.() });
   await deps.repo.save(restored);
@@ -74,6 +78,7 @@ export async function deleteArtefactCommand(
   const existing = await loadOwnArtefact(deps.repo, {
     id: input.artefactId,
     ownerId: input.requesterId,
+    scope: input.scope,
   });
   assertDeletable(existing);
   await deps.payloadStore.delete(existing.payloadRef);

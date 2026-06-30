@@ -8,6 +8,10 @@ import {
   type AuthEnv,
   type AuthInstance,
 } from "../middleware/auth";
+import {
+  singletonScopeResolver,
+  type TenantScopeResolver,
+} from "../middleware/tenant-scope";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
 import { createViewRoutes } from "./views";
@@ -21,7 +25,11 @@ import type {
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
 // S24 — the persistence-port adapters are injected (see `createApp`), not
 // imported as ambient singletons, so a superset can wire a different backend.
-export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
+export function createApiRoutes(
+  adapters: Adapters,
+  auth: AuthInstance,
+  resolveScope: TenantScopeResolver = singletonScopeResolver,
+) {
   const {
     artefactRepository,
     dataRepository,
@@ -79,7 +87,11 @@ export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
   // (in "Your artefacts") and anyone's private ones never appear (AH8). The
   // client groups/filters by kind.
   api.get("/shared", requireAuth, async (c) => {
-    const artefacts = await artefactRepository.listShared(c.get("user")!.id);
+    const scope = await resolveScope(c);
+    const artefacts = await artefactRepository.listShared(
+      c.get("user")!.id,
+      scope,
+    );
     // Enrich with owner display identity so the gallery can attribute each
     // artefact ("Shared by …"). The artefact ids/owner ids come from Hosting;
     // names/emails are composed from Identity via the user directory.
@@ -109,6 +121,7 @@ export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
       dataRepo: dataRepository,
       viewRepo: viewRepository,
       userDirectory,
+      resolveScope,
     }),
   );
 
@@ -120,6 +133,7 @@ export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
       artefactRepo: artefactRepository,
       dataRepo: dataRepository,
       userDirectory,
+      resolveScope,
     }),
   );
 
@@ -131,6 +145,7 @@ export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
       artefactRepo: artefactRepository,
       viewRepo: viewRepository,
       userDirectory,
+      resolveScope,
     }),
   );
 

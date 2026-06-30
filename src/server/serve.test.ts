@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Hono } from "hono";
+import { SINGLETON_SCOPE } from "../domain/artefact/tenant-scope";
 import type { ArtefactSummary } from "../shared/contracts";
 
 // End-to-end S6: serve an artefact by slug, enforcing the access matrix. Drives
@@ -241,7 +242,7 @@ describe("serve artefact by slug (S6)", () => {
       "../infra/db/artefact-repository.drizzle"
     );
     const repo = new DrizzleArtefactRepository(db);
-    const stored = (await repo.findById(a.id))!;
+    const stored = (await repo.findById(a.id, SINGLETON_SCOPE))!;
     await repo.save({ ...stored, status: "archived", archivedAt: new Date() });
 
     // The owner is authenticated → honest 404 (archived is inert, even to them).

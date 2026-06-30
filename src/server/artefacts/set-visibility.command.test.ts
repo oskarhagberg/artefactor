@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { setArtefactVisibilityCommand } from "./set-visibility.command";
 import { createArtefact } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
+import { SINGLETON_SCOPE as SCOPE } from "../../domain/artefact/tenant-scope";
 import { ArtefactNotFound } from "../../domain/artefact/errors";
 
 const OWNER = "owner-1";
@@ -27,7 +28,7 @@ describe("setArtefactVisibilityCommand (S5)", () => {
 
   it("mints a unique slug on first share and raises visibility (AH4)", async () => {
     const a = await setArtefactVisibilityCommand(
-      { artefactId: "a1", requesterId: OWNER, visibility: "public" },
+      { artefactId: "a1", requesterId: OWNER, visibility: "public", scope: SCOPE },
       { repo, generateSlug: () => "slug-1" },
     );
     expect(a.visibility).toBe("public");
@@ -37,11 +38,11 @@ describe("setArtefactVisibilityCommand (S5)", () => {
 
   it("reuses the retained slug across unshare → re-share (AH5)", async () => {
     await setArtefactVisibilityCommand(
-      { artefactId: "a1", requesterId: OWNER, visibility: "public" },
+      { artefactId: "a1", requesterId: OWNER, visibility: "public", scope: SCOPE },
       { repo, generateSlug: () => "slug-1" },
     );
     const priv = await setArtefactVisibilityCommand(
-      { artefactId: "a1", requesterId: OWNER, visibility: "private" },
+      { artefactId: "a1", requesterId: OWNER, visibility: "private", scope: SCOPE },
       { repo },
     );
     expect(priv.visibility).toBe("private");
@@ -49,7 +50,7 @@ describe("setArtefactVisibilityCommand (S5)", () => {
 
     // Re-share must reuse the slug, not mint a new one.
     const reshared = await setArtefactVisibilityCommand(
-      { artefactId: "a1", requesterId: OWNER, visibility: "authenticated" },
+      { artefactId: "a1", requesterId: OWNER, visibility: "authenticated", scope: SCOPE },
       { repo, generateSlug: () => "should-not-be-used" },
     );
     expect(reshared.publicSlug).toBe("slug-1");
@@ -72,7 +73,7 @@ describe("setArtefactVisibilityCommand (S5)", () => {
     const slugs = ["taken", "free"];
     let i = 0;
     const a = await setArtefactVisibilityCommand(
-      { artefactId: "a1", requesterId: OWNER, visibility: "public" },
+      { artefactId: "a1", requesterId: OWNER, visibility: "public", scope: SCOPE },
       { repo, generateSlug: () => slugs[i++]! },
     );
     expect(a.publicSlug).toBe("free");
@@ -81,7 +82,7 @@ describe("setArtefactVisibilityCommand (S5)", () => {
   it("treats a non-owner request as not-found (AH8/AH9)", async () => {
     await expect(
       setArtefactVisibilityCommand(
-        { artefactId: "a1", requesterId: "intruder", visibility: "public" },
+        { artefactId: "a1", requesterId: "intruder", visibility: "public", scope: SCOPE },
         { repo },
       ),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
@@ -90,7 +91,7 @@ describe("setArtefactVisibilityCommand (S5)", () => {
   it("throws not-found for an unknown id", async () => {
     await expect(
       setArtefactVisibilityCommand(
-        { artefactId: "missing", requesterId: OWNER, visibility: "public" },
+        { artefactId: "missing", requesterId: OWNER, visibility: "public", scope: SCOPE },
         { repo },
       ),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
