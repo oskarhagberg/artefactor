@@ -220,3 +220,53 @@ contexts to choose between: `usesStorage` is true **and** at least one *other* a
 entry. `usesStorage = false` lets the shell omit the picker (and skip the authors fetch) up
 front; the "≥1 other author" rule additionally hides the useless single-context case and covers
 legacy rows (so `usesStorage` may default to `true` with no backfill).
+
+## Amendment (post-v0.2) — tenant scope + access-policy seam
+
+> **Status:** DDD amendment (FDD slice **S22**; EE context `ee/docs/specs/ddd/tenancy.md`). Two thin
+> seams that make the deployment **multi-tenant** in a superset, **behaviour-preserving in OSS**
+> (one implicit tenant).
+
+**Problem.** OSS is single-tenant *by being one deployment*: `authenticated` means **every** signed-in
+user, and list/find queries are global. A multi-tenant superset needs artefacts scoped to an
+**organization** and the `authenticated` tier reinterpreted as "within my org" — without forking the
+access matrix or the repository.
+
+**Seam (a) — tenant scope.**
+- `Artefact` gains **`tenantId`** (immutable, set at create). OSS default = a single well-known
+  tenant (`DEFAULT_TENANT`), so every row shares one tenant and behaviour is byte-identical.
+- `ArtefactRepository` list/find operations become **scope-aware**: they take a **`TenantScope`** and
+  never return rows outside it (subordinate data/view/version reads inherit the scope). OSS passes
+  the singleton scope (no behavioural change); a superset passes the caller's org(s).
+
+**Seam (b) — access policy.**
+- The access-matrix decision (who may view an artefact) is delegated to an **`AccessPolicy`** port.
+  OSS default = the matrix above. A superset overrides **only the `authenticated` tier** to mean
+  "co-member of the artefact's tenant." AH8 (no existence leak / uniform redirect) and AH9 (owner
+  authority) are **fixed under any policy**.
+
+**AH17 — tenant scope is invisible to OSS.** Under the default singleton tenant + scope, the
+aggregate and all behaviour are identical to today; `tenantId` is carried but never discriminates.
+Permanent delete (AH11) and every per-artefact subordinate (data entries, view entries, retained
+versions) are tenant-scoped in a superset.
+
+**AH18 — access is policy-decided.** The matrix in this spec is the **OSS default policy**. Only the
+`authenticated` tier's meaning is overridable (login-wide ↔ org-wide); `private`/`selected`/`public`
+semantics and the AH8 uniformity are not. Migration adds `tenant_id` defaulting to `DEFAULT_TENANT`.
+
+## Amendment (post-v0.2) — payload-size policy seam
+
+> **Status:** DDD amendment (FDD slice **S23**; EE context `ee/docs/specs/ddd/usage-quota.md`).
+> Behaviour-preserving in OSS.
+
+**Problem.** The per-artefact cap `MAX_PAYLOAD_BYTES` (**100 MB**, AH2) is a hardcoded constant. The
+EE *Large Artefacts* add-on needs a tighter default (**10 MB**) liftable to 100 MB per entitlement —
+without OSS losing its flat 100 MB.
+
+**Seam.** Extract the cap into a **payload-size policy** consulted by `createArtefact`/`editArtefact`
+when validating `HtmlPayload`. **OSS default keeps 100 MB** (AH2 unchanged). A superset drives the
+cap from plan entitlements (10 MB default, 100 MB with *Large Artefacts*).
+
+**AH19 — size cap is policy-decided, 100 MB in OSS.** The HtmlPayload invariant (AH2: non-empty,
+≤ cap) holds; only the *cap value* is supplied by the policy. The OSS policy returns the constant
+100 MB, so OSS is byte-identical.

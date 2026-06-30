@@ -564,6 +564,42 @@ chrome. (New DDD bounded context: `ddd/artefact-views.md`, invariants VT1–VT5;
 - **Boundary:** **OSS** (a general hosting feature; pure additive context + chrome). No `ee/`
   involvement.
 
+### S22 — Tenant scope + access-policy seam *(enabler; behaviour-preserving)*
+Two thin core seams that let a superset be **multi-tenant**, byte-identical in OSS. (DDD amendments:
+`ddd/artefact-hosting.md` AH17/AH18, `ddd/identity-access.md` IA5. EE context:
+`ee/docs/specs/ddd/tenancy.md`.)
+- **Scope.** `Artefact` gains `tenantId` (immutable; migration defaults existing + new rows to
+  `DEFAULT_TENANT`). `ArtefactRepository` list/find take a **`TenantScope`**; OSS wires the singleton
+  scope, so listing/serving is unchanged. Subordinate reads (data, views, versions) inherit the
+  scope. *(AH17)*
+- **Access policy.** Extract the access-matrix decision into an **`AccessPolicy`** port; OSS wires
+  the default = the current matrix. Only the `authenticated` tier is overridable; AH8/AH9 are fixed.
+  *(AH18)*
+- **Identity.** The sign-up allowlist predicate gains an **allow-all** config option (OSS keeps its
+  configured domains). *(IA5)*
+- **Acceptance:** under the OSS defaults, every existing access/listing/serving test passes
+  unchanged (one tenant; `authenticated` = any signed-in user; allowlist as configured); a stub
+  multi-tenant scope makes `listByOwner`/`listShared`/serve exclude other-tenant rows; a stub access
+  policy that scopes `authenticated` to a tenant denies a signed-in non-member with a flat 404 (AH8
+  holds).
+- **Boundary:** **OSS** (the scope + policy must live in the repo/serving/access path). The org
+  model, the real scope, and the org-aware policy are the **EE Tenancy/Organizations** context.
+
+### S23 — EE enforcement policy seams (quota / payload-size / branding) *(enabler; behaviour-preserving)*
+The core seams the **EE Usage & Quota** context plugs into — all **no-op in OSS**. (DDD:
+`ee/docs/specs/ddd/usage-quota.md`; size-cap amendment `ddd/artefact-hosting.md` AH19.)
+- **QuotaPolicy.** A `QuotaPolicy` port consulted at `createArtefactCommand` (+ payload-replacing
+  edit for the storage fence). OSS default = **allow / unlimited**. *(usage-quota Q1)*
+- **Payload-size policy.** Extract `MAX_PAYLOAD_BYTES` into a policy; **OSS default keeps 100 MB**.
+  EE drives it from the *Large Artefacts* entitlement (10 MB / 100 MB). *(AH19)*
+- **BrandingPolicy.** A `BrandingPolicy` consulted by the host shell on **public** serves; **OSS
+  default = no badge**. EE shows the Artefactor badge unless *Remove branding* is held.
+- **Acceptance:** under the OSS defaults, creates are unlimited, the size cap is 100 MB, and no badge
+  renders — byte-identical; a stub deny-quota makes `create` return `402`; a stub 10 MB size policy
+  rejects an 11 MB payload; a stub branding policy renders the badge on a public serve.
+- **Boundary:** **OSS** (the seams sit at the create/edit commands and the S12 shell). The metering,
+  plan-aware policy, entitlements, and soft fences are the **EE Usage & Quota** context (EQ1–EQ5).
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
@@ -574,4 +610,7 @@ independent of the sharing branch and can proceed in parallel once S2 exists. ~~
 keys) and ~~S17~~ (data merge-patch) are dropped — see the DAG note. S18 is the programmatic
 surface. **S19** (retention seam + data pin) depends only on **S3** (the edit/replace path) and
 **S11** (`DataEntry`); it is behaviour-preserving in OSS and is the sole core dependency of the
-EE *Artefact History* context.
+EE *Artefact History* context. **S22** (tenant scope + access-policy seam) depends on the repo +
+serving/access path (**S6/S10/S14**) and **S23** (EE policy seams) on the create/edit commands
+(**S2/S3**) + the S12 shell; both are behaviour-preserving enablers and the sole core dependencies
+of the EE **Tenancy/Organizations** and **Usage & Quota** contexts respectively.

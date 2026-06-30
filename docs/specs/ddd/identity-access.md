@@ -78,8 +78,33 @@ schema: `oauthApplication`, `oauthAccessToken`, `oauthConsent`).
 4. An Account may be created only with an email whose domain is in the configured
    allowlist; this holds for every authentication provider.
 
+## Amendment (post-v0.2) — multi-tenant organizations & open signup
+
+> **Status:** DDD amendment (FDD slice **S22**; EE context `ee/docs/specs/ddd/tenancy.md`).
+> Behaviour-preserving in OSS.
+
+OSS is single-tenant; the sign-up **domain allowlist** (IA4) is how the one deployment gates its org.
+A multi-tenant superset:
+
+- **Delegates organizations, memberships, roles, and invitations to BetterAuth's `organization`
+  plugin** — mirroring the user/session delegation. The domain refers to an org only by its
+  BetterAuth **org id** (`tenantId`); there is no hand-rolled org/membership aggregate.
+- **Opens sign-up.** The allowlist predicate (`domain/identity/email-domain.ts`) gains an
+  **allow-all** configuration so anyone may self-register; **org membership (via invites), not the
+  email domain, then gates access** to an org's `authenticated` artefacts (see `tenancy.md` T3). OSS
+  keeps the allowlist (default behaviour unchanged).
+
+**IA5 — org delegation is thin; allowlist becomes configurable.** As with users, the domain stores
+no org/membership data — it trusts BetterAuth's org id as `tenantId` and its role claims for org
+administration. **IA4 still holds**: account creation is gated by the allowlist predicate; the
+superset merely configures it to allow-all. An invited user may therefore sign up regardless of
+email domain.
+
 ## Open questions
 
 - MCP OAuth scopes: a single implicit "act as me" grant vs. finer scopes (read-only vs.
   write). Default: **one grant**, the token can do anything its Account can; revisit if needed.
 - OAuth providers beyond Google (e.g. GitHub). Default: Google only at launch.
+- MCP token ↔ active org: which org an MCP `create_artefact` is stamped with when the token's
+  Account belongs to several (the token's default/active org vs. an explicit tool arg). Leaning the
+  Account's active org; confirm with the Tenancy context. **TBD.**
