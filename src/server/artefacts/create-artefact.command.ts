@@ -5,6 +5,7 @@ import {
   type Artefact,
 } from "../../domain/artefact/artefact";
 import { isArtefactKind } from "../../domain/artefact/kind";
+import { payloadUsesStorage } from "../../domain/artefact/uses-storage";
 import { InvariantViolation } from "../../domain/artefact/errors";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
 import type { PayloadStore } from "../../domain/artefact/ports";
@@ -53,6 +54,7 @@ export async function createArtefactCommand(
       title: input.title,
       kind: input.kind,
       payload: stored,
+      usesStorage: payloadUsesStorage(input.payload), // AH16
       now: (deps.now ?? (() => new Date()))(),
     });
     await deps.repo.save(artefact);

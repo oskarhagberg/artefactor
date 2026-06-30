@@ -503,6 +503,28 @@ without adding versioning to OSS. (DDD amendments: `ddd/artefact-hosting.md` AH1
   policy, the version store, and rollback are the **EE** *Artefact History* context — see
   `ee/docs/specs/`. Migration adds the nullable `authoredAgainstVersion` column.
 
+### S20 — Hide the data-context switcher for non-persisting artefacts
+Stop showing the "Data context" picker (S12 chrome) on artefacts that can't usefully use it.
+(DDD amendment: `ddd/artefact-hosting.md` AH16.)
+- **Domain** — a pure `detectUsesStorage(html)` (word-boundary `localStorage` match; excludes
+  `sessionStorage`). `Artefact` gains `usesStorage`, set by `createArtefact` and recomputed by
+  `editArtefact` only when the payload is replaced. *(AH 16)*
+- **Commands** — `create`/`edit` decode the raw payload bytes (which they already hold to `put`)
+  and pass the computed `usesStorage` into the domain.
+- **Persistence** — new `uses_storage` column (migration); the Drizzle + in-memory repos map it.
+  Defaults to `true` for existing rows (no backfill — the "≥1 other author" rule below hides the
+  picker for them anyway).
+- **Shell (S12)** — the served chrome shows the picker only when `usesStorage` **and** the
+  `…/data/authors` fetch yields ≥1 author other than the viewer; otherwise the picker is omitted
+  (and when `usesStorage` is false the shell skips the fetch). The artefact + its data API are
+  unchanged — this is chrome only.
+- **Acceptance:** an artefact whose HTML uses `localStorage` → `usesStorage = true`; one using
+  only `sessionStorage` or no storage → `false`; a title-only edit doesn't flip it; a
+  payload-replacing edit recomputes it; the served shell omits the picker when `usesStorage` is
+  false; with `usesStorage` true but no other author's data, the picker stays hidden; it appears
+  once a second author has an entry. Access/serving behaviour is unchanged (AH8/AH16).
+- **Boundary:** **OSS** (benefits self-hosters; pure chrome/UX). No `ee/` involvement.
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,

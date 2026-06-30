@@ -5,6 +5,7 @@ import {
 } from "../../domain/artefact/artefact";
 import { InvariantViolation } from "../../domain/artefact/errors";
 import { isArtefactKind } from "../../domain/artefact/kind";
+import { payloadUsesStorage } from "../../domain/artefact/uses-storage";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
 import type { PayloadStore } from "../../domain/artefact/ports";
 import { loadOwnActiveArtefact } from "./get-own-artefact";
@@ -60,6 +61,11 @@ export async function editArtefactCommand(
       title: input.title,
       kind: input.kind as Artefact["kind"] | undefined,
       payload: stored,
+      // Recompute usesStorage from the new bytes when the payload is replaced (AH16).
+      usesStorage:
+        input.payload !== undefined
+          ? payloadUsesStorage(input.payload)
+          : undefined,
     });
     await deps.repo.save(edited);
 

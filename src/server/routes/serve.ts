@@ -58,6 +58,7 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
         authorsEndpoint: `/api/artefacts/${encodeURIComponent(slug)}/data/authors`,
         viewerId,
         ownerId: artefact.ownerId,
+        usesStorage: artefact.usesStorage,
       }),
     );
   });

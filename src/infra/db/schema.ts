@@ -216,6 +216,12 @@ export const artefact = sqliteTable(
     payloadRef: text("payload_ref").notNull(),
     payloadBytes: integer("payload_bytes").notNull(),
     payloadHash: text("payload_hash").notNull(),
+    // AH16 (S20): does the payload appear to use localStorage? Drives the S12
+    // chrome only. Defaults true so legacy rows are unaffected (the "≥1 other
+    // author" rule hides the picker for them anyway — no backfill needed).
+    usesStorage: integer("uses_storage", { mode: "boolean" })
+      .notNull()
+      .default(true),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),

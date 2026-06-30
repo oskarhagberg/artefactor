@@ -74,6 +74,26 @@ describe("editArtefactCommand (S3)", () => {
     );
   });
 
+  it("recomputes usesStorage on a payload edit, but not on a title-only edit (AH16)", async () => {
+    // Initial payload has no storage usage.
+    const start = await repo.findById("a1");
+    expect(start!.usesStorage).toBe(false);
+
+    // Replacing with localStorage-using HTML flips it on.
+    const withStorage = await editArtefactCommand(
+      { artefactId: "a1", requesterId: OWNER, payload: bytes("<script>localStorage.x=1</script>") },
+      deps(),
+    );
+    expect(withStorage.usesStorage).toBe(true);
+
+    // A title-only edit leaves the flag untouched.
+    const titled = await editArtefactCommand(
+      { artefactId: "a1", requesterId: OWNER, title: "Renamed" },
+      deps(),
+    );
+    expect(titled.usesStorage).toBe(true);
+  });
+
   it("leaves no orphan and keeps the old payload when the edit is rejected", async () => {
     await expect(
       editArtefactCommand(

@@ -21,6 +21,10 @@ export interface Artefact {
   payloadRef: string;
   payloadBytes: number;
   payloadHash: string;
+  // AH16: whether the payload appears to use the localStorage persistence API.
+  // Derived metadata, recomputed whenever the payload is set. Drives host chrome
+  // (the S12 switcher) only — never access/serving.
+  usesStorage: boolean;
   createdAt: Date;
   updatedAt: Date;
   archivedAt: Date | null;
@@ -32,6 +36,9 @@ export interface CreateArtefactInput {
   title: string;
   kind: ArtefactKind;
   payload: StoredPayload;
+  // Computed by the command from the raw payload bytes (AH16). Optional so
+  // tests/fixtures can omit it; defaults to false.
+  usesStorage?: boolean;
   now?: Date;
 }
 
@@ -65,6 +72,7 @@ export function createArtefact(input: CreateArtefactInput): Artefact {
     payloadRef: input.payload.ref,
     payloadBytes: input.payload.bytes,
     payloadHash: input.payload.hash,
+    usesStorage: input.usesStorage ?? false,
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
@@ -123,6 +131,9 @@ export interface EditArtefactChanges {
   // A newly-stored payload replacing the current one. The caller is responsible
   // for deleting the previous payload after a successful edit.
   payload?: StoredPayload;
+  // Recomputed `usesStorage` (AH16), supplied by the command alongside a payload
+  // replacement. Ignored when no payload is provided (title/kind-only edits).
+  usesStorage?: boolean;
   now?: Date;
 }
 
@@ -159,6 +170,8 @@ export function editArtefact(a: Artefact, changes: EditArtefactChanges): Artefac
     next.payloadRef = changes.payload.ref;
     next.payloadBytes = changes.payload.bytes;
     next.payloadHash = changes.payload.hash;
+    // Recompute on payload replacement only (AH16); a title/kind edit leaves it.
+    next.usesStorage = changes.usesStorage ?? a.usesStorage;
   }
 
   return next;

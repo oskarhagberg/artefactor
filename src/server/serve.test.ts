@@ -83,6 +83,36 @@ describe("serve artefact by slug (S6)", () => {
     expect(body).not.toContain(HTML);
   });
 
+  it("flags usesStorage in the shell config so the picker is suppressed for non-persisting artefacts (S20)", async () => {
+    // The default fixture HTML has no localStorage → flagged false.
+    const stat = await makeArtefact("public");
+    expect(await (await get(stat.publicSlug!)).text()).toContain('"usesStorage":false');
+
+    // An artefact whose HTML uses localStorage → flagged true (picker can appear).
+    const form = new FormData();
+    form.set("title", "persisting form");
+    form.set("kind", "form");
+    form.set(
+      "payload",
+      new File(["<script>localStorage.setItem('k','v')</script>"], "p.html"),
+    );
+    const created = (await (
+      await app.request("/api/artefacts", {
+        method: "POST",
+        body: form,
+        headers: { cookie: ownerCookie },
+      })
+    ).json()) as ArtefactSummary;
+    const shared = (await (
+      await app.request(`/api/artefacts/${created.id}/visibility`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", cookie: ownerCookie },
+        body: JSON.stringify({ visibility: "public" }),
+      })
+    ).json()) as ArtefactSummary;
+    expect(await (await get(shared.publicSlug!)).text()).toContain('"usesStorage":true');
+  });
+
   it("shows the artefact's icon, title and kind in the shell toolbar (as in the list view)", async () => {
     const a = await makeArtefact("public");
     const body = await (await get(a.publicSlug!)).text();

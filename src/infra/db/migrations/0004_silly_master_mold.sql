@@ -1,0 +1,1 @@
+ALTER TABLE `artefact` ADD `uses_storage` integer DEFAULT true NOT NULL;

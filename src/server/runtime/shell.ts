@@ -35,6 +35,10 @@ export interface HostShellContext {
   viewerId: string | null;
   // The artefact owner, so the picker can tag the owner's entry.
   ownerId: string;
+  // AH16/S20: whether the artefact persists data (uses localStorage). When
+  // false the data-context picker is omitted entirely (and its authors fetch
+  // skipped) — there is no data to switch between.
+  usesStorage: boolean;
 }
 
 export function renderHostShell(ctx: HostShellContext): string {
@@ -44,6 +48,7 @@ export function renderHostShell(ctx: HostShellContext): string {
     ownerId: ctx.ownerId,
     frameSrc: ctx.framePath,
     authorsEndpoint: ctx.authorsEndpoint,
+    usesStorage: ctx.usesStorage,
   };
   // Escape `<` so a title containing "</script>" cannot break out of the tag.
   const cfgJson = JSON.stringify(cfg).replace(/</g, "\\u003c");
@@ -94,6 +99,10 @@ export function renderHostShell(ctx: HostShellContext): string {
   .ae-bar select { font: inherit; font-size: 13px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); max-width: 40vw; color: var(--fg); }
   .ae-ro { display: none; font-size: 12px; font-weight: 600; color: #9a6700; background: #fff8c5; border: 1px solid #eac54f; border-radius: 999px; padding: .1rem .5rem; }
   .ae-ro.show { display: inline; }
+  /* The data-context picker is hidden until there is another author to switch
+     to (S20); a non-persisting artefact never reveals it. */
+  .ae-switch { display: none; align-items: center; gap: .6rem; }
+  .ae-switch.show { display: flex; }
   .ae-frame { flex: 1 1 auto; width: 100%; border: 0; }
 </style>
 </head>
@@ -109,9 +118,11 @@ export function renderHostShell(ctx: HostShellContext): string {
         <div class="ae-sub">${escapeHtml(subLabel)}</div>
       </div>
     </div>
-    <label for="ae-ctx">Data context</label>
-    <select id="ae-ctx" aria-label="Data context"></select>
-    <span class="ae-ro" id="ae-ro">read-only</span>
+    <div class="ae-switch" id="ae-switch">
+      <label for="ae-ctx">Data context</label>
+      <select id="ae-ctx" aria-label="Data context"></select>
+      <span class="ae-ro" id="ae-ro">read-only</span>
+    </div>
   </div>
   <iframe class="ae-frame" id="ae-frame" title="Artefact"></iframe>
 <script>
@@ -120,6 +131,7 @@ export function renderHostShell(ctx: HostShellContext): string {
   var sel = document.getElementById("ae-ctx");
   var ro = document.getElementById("ae-ro");
   var frame = document.getElementById("ae-frame");
+  var switcher = document.getElementById("ae-switch");
 
   function seed(authorId){
     frame.src = authorId ? cfg.frameSrc + "?author=" + encodeURIComponent(authorId) : cfg.frameSrc;
@@ -156,19 +168,27 @@ export function renderHostShell(ctx: HostShellContext): string {
   // even if the authors list is empty or fails to load.
   seed("");
 
-  fetch(cfg.authorsEndpoint, { credentials: "same-origin" })
-    .then(function(r){ return r.ok ? r.json() : { authors: [] }; })
-    .then(function(data){
-      (data.authors || []).forEach(function(a){
-        // The viewer's own entry is already covered by the default option.
-        if (a.authorId === cfg.viewerId) return;
-        var opt = document.createElement("option");
-        opt.value = a.authorId;
-        opt.textContent = label(a);
-        sel.appendChild(opt);
-      });
-    })
-    .catch(function(){});
+  // S20: only fetch authors / reveal the picker for artefacts that persist data
+  // (usesStorage). A non-persisting artefact never has a context to switch to.
+  if (cfg.usesStorage) {
+    fetch(cfg.authorsEndpoint, { credentials: "same-origin" })
+      .then(function(r){ return r.ok ? r.json() : { authors: [] }; })
+      .then(function(data){
+        var others = 0;
+        (data.authors || []).forEach(function(a){
+          // The viewer's own entry is already covered by the default option.
+          if (a.authorId === cfg.viewerId) return;
+          var opt = document.createElement("option");
+          opt.value = a.authorId;
+          opt.textContent = label(a);
+          sel.appendChild(opt);
+          others++;
+        });
+        // Reveal the picker only when there is another author to switch to.
+        if (others > 0) switcher.classList.add("show");
+      })
+      .catch(function(){});
+  }
 
   sel.addEventListener("change", function(){ seed(sel.value); });
 })();

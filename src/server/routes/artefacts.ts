@@ -105,6 +105,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
           authorsEndpoint: `/api/artefacts/${encodeURIComponent(artefact.id)}/data/authors`,
           viewerId: ownerId(c),
           ownerId: artefact.ownerId,
+          usesStorage: artefact.usesStorage,
         }),
       );
     } catch (err) {

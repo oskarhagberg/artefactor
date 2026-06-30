@@ -191,3 +191,31 @@ retention policy is responsible for purging any payloads it retained for the art
 **Content addressing.** `HtmlPayload` already carries a `sha256` content hash. That hash is the
 natural, stable **version identity** a retaining policy uses, and it lets an identical payload
 (e.g. a rollback re-applying an earlier version) **dedupe** to the same stored blob.
+
+## Amendment (post-v0.2) — `usesStorage` flag
+
+> **Status:** DDD amendment (FDD slice **S20**). Adds a derived metadata flag that drives **host
+> chrome only** — never access or persistence behaviour.
+
+**Problem.** The host data-context switcher (S12) renders a "Data context" picker in the chrome
+around every served artefact. For an artefact that never persists anything (a static deck, a
+prototype with no `localStorage`) the picker is meaningless.
+
+**Field.** `Artefact` gains a derived boolean:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `usesStorage` | boolean | Whether the payload appears to use the persistence API. **Recomputed whenever the payload is set** (create / payload-replacing edit); title/kind-only edits leave it unchanged. |
+
+**AH16 — `usesStorage` is a heuristic for chrome only.** It is detected by a pure scan of the
+HTML for the `localStorage` API (a word-boundary match — so `sessionStorage`, which Artefactor
+does **not** persist, does not count). It may have rare false negatives (e.g. dynamically
+constructed `window['local'+'Storage']`); this is acceptable because it **only decides whether
+host UI is shown** — it never gates access (AH8), serving, or the data API. The served artefact's
+behaviour is identical regardless.
+
+**Use (S12 chrome).** The switcher is shown only when the artefact **could** have multiple data
+contexts to choose between: `usesStorage` is true **and** at least one *other* author has a data
+entry. `usesStorage = false` lets the shell omit the picker (and skip the authors fetch) up
+front; the "≥1 other author" rule additionally hides the useless single-context case and covers
+legacy rows (so `usesStorage` may default to `true` with no backfill).

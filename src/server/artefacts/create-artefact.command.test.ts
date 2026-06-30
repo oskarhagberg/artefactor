@@ -50,6 +50,26 @@ describe("createArtefactCommand (S2)", () => {
     expect(d.payloadStore.live.size).toBe(1);
   });
 
+  it("computes usesStorage from the payload (AH16)", async () => {
+    const d = deps();
+    const stat = await createArtefactCommand(
+      { ownerId: "user_1", title: "Static", kind: "slide-deck", payload: html },
+      d,
+    );
+    expect(stat.usesStorage).toBe(false);
+
+    const persists = await createArtefactCommand(
+      {
+        ownerId: "user_1",
+        title: "Form",
+        kind: "form",
+        payload: new TextEncoder().encode("<script>localStorage.setItem('k','v')</script>"),
+      },
+      d,
+    );
+    expect(persists.usesStorage).toBe(true);
+  });
+
   it("rejects an empty title and leaves no orphan payload (AH3)", async () => {
     const d = deps();
     await expect(
