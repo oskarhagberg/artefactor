@@ -42,4 +42,20 @@ describe("isEmailDomainAllowed", () => {
   it("rejects everything when the allowlist is empty", () => {
     expect(isEmailDomainAllowed("alice@example.com", [])).toBe(false);
   });
+
+  // S22 part C / IA5 — the wildcard `*` opens sign-up to any valid email domain
+  // (the cloud open-signup config). OSS keeps its configured domains (no `*`), so
+  // this is opt-in and behaviour-preserving.
+  describe("wildcard (IA5 — open signup)", () => {
+    it("accepts any valid domain when `*` is in the allowlist", () => {
+      expect(isEmailDomainAllowed("anyone@gmail.com", ["*"])).toBe(true);
+      // `*` alongside explicit domains still opens everything.
+      expect(isEmailDomainAllowed("x@whatever.io", ["example.com", "*"])).toBe(true);
+    });
+
+    it("still rejects a malformed email even with `*` (needs a real domain)", () => {
+      expect(isEmailDomainAllowed("not-an-email", ["*"])).toBe(false);
+      expect(isEmailDomainAllowed("@example.com", ["*"])).toBe(false);
+    });
+  });
 });

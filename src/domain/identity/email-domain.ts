@@ -15,9 +15,18 @@ export function emailDomain(email: string): string | null {
   return domain.length > 0 ? domain : null;
 }
 
+// The wildcard sentinel that opens sign-up to any valid email domain (S22 part C
+// / IA5). A multi-tenant superset configures `AUTH_ALLOWED_EMAIL_DOMAINS=["*"]`
+// for self-serve open sign-up (membership, not domain, gates access — T3); OSS
+// keeps its explicit domains, so the default behaviour is unchanged.
+export const ALLOW_ALL_DOMAINS = "*";
+
 /**
- * Whether `email`'s domain is in `allowedDomains` (exact, case-insensitive
- * match — a subdomain like `x@sub.example.com` is NOT a match for `example.com`).
+ * Whether `email`'s domain is allowed. A domain matches when it is in
+ * `allowedDomains` (exact, case-insensitive — a subdomain like
+ * `x@sub.example.com` is NOT a match for `example.com`), **or** when the
+ * allowlist contains the wildcard `*` (open sign-up, IA5). A malformed email is
+ * always rejected — even under `*`, a real domain is required.
  */
 export function isEmailDomainAllowed(
   email: string,
@@ -25,5 +34,6 @@ export function isEmailDomainAllowed(
 ): boolean {
   const domain = emailDomain(email);
   if (!domain) return false;
+  if (allowedDomains.includes(ALLOW_ALL_DOMAINS)) return true;
   return allowedDomains.some((d) => d.trim().toLowerCase() === domain);
 }

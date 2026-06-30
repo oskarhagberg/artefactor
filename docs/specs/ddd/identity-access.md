@@ -90,9 +90,11 @@ A multi-tenant superset:
   plugin** — mirroring the user/session delegation. The domain refers to an org only by its
   BetterAuth **org id** (`tenantId`); there is no hand-rolled org/membership aggregate.
 - **Opens sign-up.** The allowlist predicate (`domain/identity/email-domain.ts`) gains an
-  **allow-all** configuration so anyone may self-register; **org membership (via invites), not the
+  **allow-all** configuration — the wildcard sentinel **`"*"`** in the allowed-domains list
+  (`ALLOW_ALL_DOMAINS`); a superset sets `AUTH_ALLOWED_EMAIL_DOMAINS=["*"]`. A malformed email is
+  still rejected even under `*` (a real domain is required). **Org membership (via invites), not the
   email domain, then gates access** to an org's `authenticated` artefacts (see `tenancy.md` T3). OSS
-  keeps the allowlist (default behaviour unchanged).
+  keeps its explicit domains (no `*`), so default behaviour is unchanged.
 
 **IA5 — org delegation is thin; allowlist becomes configurable.** As with users, the domain stores
 no org/membership data — it trusts BetterAuth's org id as `tenantId` and its role claims for org
