@@ -370,8 +370,9 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
 
     const payload = new Uint8Array(await file.arrayBuffer());
     try {
+      const scope = await deps.resolveScope(c);
       const artefact = await createArtefactCommand(
-        { ownerId: ownerId(c), title, kind, payload },
+        { ownerId: ownerId(c), title, kind, payload, tenantId: scope.tenantId },
         deps,
       );
       return c.json<ArtefactSummary>(toArtefactSummary(artefact), 201);

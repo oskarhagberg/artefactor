@@ -20,6 +20,10 @@ export interface CreateArtefactInput {
   title: string;
   kind: string; // unvalidated; checked against the closed kind enum here
   payload: Uint8Array; // raw trusted HTML bytes
+  // S22/AH17 — the owning tenant. Omitted by OSS callers (the factory defaults
+  // to DEFAULT_TENANT, byte-identical); a multi-tenant superset passes the
+  // creator's active org so the artefact is stamped with its tenant (ET2/T1).
+  tenantId?: string;
 }
 
 export interface CreateArtefactDeps {
@@ -54,6 +58,7 @@ export async function createArtefactCommand(
       title: input.title,
       kind: input.kind,
       payload: stored,
+      tenantId: input.tenantId, // AH17 — undefined ⇒ DEFAULT_TENANT (OSS)
       usesStorage: payloadUsesStorage(input.payload), // AH16
       now: (deps.now ?? (() => new Date()))(),
     });

@@ -121,7 +121,13 @@ export function registerArtefactTools(
     async ({ title, kind, html, visibility }) =>
       run(async () => {
         const created = await createArtefactCommand(
-          { ownerId: userId, title, kind, payload: new TextEncoder().encode(html) },
+          {
+            ownerId: userId,
+            title,
+            kind,
+            payload: new TextEncoder().encode(html),
+            tenantId: scope.tenantId,
+          },
           { repo, payloadStore },
         );
         if (!visibility || visibility === "private") return summarize(created);
