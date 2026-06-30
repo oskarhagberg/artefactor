@@ -1,6 +1,7 @@
 import { db } from "../infra/db/client";
 import { DrizzleArtefactRepository } from "../infra/db/artefact-repository.drizzle";
 import { DrizzleDataRepository } from "../infra/db/data-repository.drizzle";
+import { DrizzleViewRepository } from "../infra/db/view-repository.drizzle";
 import { DrizzleUserDirectory } from "../infra/db/user-directory.drizzle";
 import { FilesystemPayloadStore } from "../infra/storage/payload-store";
 import { env } from "./env";
@@ -10,6 +11,8 @@ import { env } from "./env";
 // Drizzle repositories and filesystem payload store.
 export const artefactRepository = new DrizzleArtefactRepository(db);
 export const dataRepository = new DrizzleDataRepository(db);
+// S21 — Artefact Views: per-(artefact, viewer) last-viewed records.
+export const viewRepository = new DrizzleViewRepository(db);
 export const payloadStore = new FilesystemPayloadStore(
   env.ARTEFACTOR_PAYLOAD_DIR,
 );

@@ -135,6 +135,19 @@ describe("serve artefact by slug (S6)", () => {
     expect(signedIn).toContain('href="/"');
   });
 
+  it("renders host tools (data-context switcher) only for signed-in viewers, never anonymous", async () => {
+    const a = await makeArtefact("public");
+    // The host-tools wrapper (and the picker inside it) are omitted entirely for
+    // anonymous viewers — they only ever see the artefact + title bar.
+    const anon = await (await get(a.publicSlug!)).text();
+    expect(anon).not.toContain('class="ae-tools"');
+    expect(anon).not.toContain('id="ae-switch"');
+    // A signed-in viewer gets the host-tools wrapper (future widgets live here too).
+    const signedIn = await (await get(a.publicSlug!, otherCookie)).text();
+    expect(signedIn).toContain('class="ae-tools"');
+    expect(signedIn).toContain('id="ae-switch"');
+  });
+
   it("serves the artefact payload + bootstrap in the frame (read-only for the anonymous)", async () => {
     const a = await makeArtefact("public");
     const body = await (await frame(a.publicSlug!)).text();

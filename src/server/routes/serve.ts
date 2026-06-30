@@ -3,6 +3,8 @@ import { canViewArtefact } from "../../domain/artefact/access";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
 import type { PayloadStore } from "../../domain/artefact/ports";
 import type { DataRepository } from "../../domain/data/data-repository";
+import type { ViewRepository } from "../../domain/views/view-repository";
+import { recordArtefactView } from "../views/views.command";
 import { renderServedArtefact } from "../runtime/render";
 import { renderHostShell } from "../runtime/shell";
 import { attachSession, type AuthEnv } from "../middleware/auth";
@@ -11,6 +13,7 @@ export interface ServingDeps {
   repo: ArtefactRepository;
   payloadStore: PayloadStore;
   dataRepo: DataRepository;
+  viewRepo: ViewRepository;
 }
 
 // S6 + S12 — Serve artefact by slug. The shared links point at `/a/:slug`, which
@@ -49,6 +52,19 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
       return c.notFound();
     }
 
+    // S21 — record that a signed-in viewer opened this artefact (latest view
+    // only, VT1). Anonymous opens are never recorded (VT2). Best-effort: view
+    // tracking must never break serving, so a store hiccup is swallowed.
+    if (viewerId !== null) {
+      try {
+        await recordArtefactView(artefact.id, viewerId, {
+          viewRepo: deps.viewRepo,
+        });
+      } catch {
+        // Non-critical analytics — ignore and serve the artefact regardless.
+      }
+    }
+
     return c.html(
       renderHostShell({
         title: artefact.title,
@@ -56,6 +72,7 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
         updatedAt: artefact.updatedAt.toISOString(),
         framePath: `/a/${encodeURIComponent(slug)}/frame`,
         authorsEndpoint: `/api/artefacts/${encodeURIComponent(slug)}/data/authors`,
+        viewersEndpoint: `/api/artefacts/${encodeURIComponent(slug)}/viewers`,
         viewerId,
         ownerId: artefact.ownerId,
         usesStorage: artefact.usesStorage,

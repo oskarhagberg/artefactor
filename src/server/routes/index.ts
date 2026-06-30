@@ -7,10 +7,12 @@ import {
   dataRepository,
   payloadStore,
   userDirectory,
+  viewRepository,
 } from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
+import { createViewRoutes } from "./views";
 import { createUserRoutes } from "./users";
 import type {
   MeResponse,
@@ -98,6 +100,7 @@ export function createApiRoutes() {
       repo: artefactRepository,
       payloadStore,
       dataRepo: dataRepository,
+      viewRepo: viewRepository,
       userDirectory,
     }),
   );
@@ -109,6 +112,17 @@ export function createApiRoutes() {
     createDataRoutes({
       artefactRepo: artefactRepository,
       dataRepo: dataRepository,
+      userDirectory,
+    }),
+  );
+
+  // S21 — Artefact Views: the "viewed by" list for an artefact, addressed by its
+  // slug or id. A view itself is recorded on the serving path (see routes/serve.ts).
+  api.route(
+    "/artefacts/:ref/viewers",
+    createViewRoutes({
+      artefactRepo: artefactRepository,
+      viewRepo: viewRepository,
       userDirectory,
     }),
   );

@@ -6,6 +6,7 @@ import {
 } from "../../domain/artefact/artefact";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
 import type { DataRepository } from "../../domain/data/data-repository";
+import type { ViewRepository } from "../../domain/views/view-repository";
 import type { PayloadStore } from "../../domain/artefact/ports";
 import { loadOwnActiveArtefact, loadOwnArtefact } from "./get-own-artefact";
 
@@ -21,11 +22,13 @@ export interface LifecycleDeps {
   now?: () => Date;
 }
 
-// Permanent delete (S15, AH11) needs to remove the payload file and the data
-// entries alongside the aggregate row, so it carries extra ports.
+// Permanent delete (S15, AH11) needs to remove the payload file, the data
+// entries, and the view entries (S21/VT5) alongside the aggregate row, so it
+// carries extra ports.
 export interface DeleteArtefactDeps {
   repo: ArtefactRepository;
   dataRepo: DataRepository;
+  viewRepo: ViewRepository;
   payloadStore: PayloadStore;
 }
 
@@ -62,8 +65,8 @@ export async function restoreArtefactCommand(
 // Permanently delete an archived artefact the caller owns (S15, AH11). Loads
 // regardless of status (non-owner / unknown → not-found, so existence doesn't
 // leak); `assertDeletable` rejects a non-archived one (→ InvariantViolation).
-// Removes the payload file and data entries before the row so nothing is
-// orphaned (the data_entry FK cascade is a DB-level backstop).
+// Removes the payload file, data entries, and view entries before the row so
+// nothing is orphaned (the FK cascades are a DB-level backstop).
 export async function deleteArtefactCommand(
   input: LifecycleInput,
   deps: DeleteArtefactDeps,
@@ -75,5 +78,6 @@ export async function deleteArtefactCommand(
   assertDeletable(existing);
   await deps.payloadStore.delete(existing.payloadRef);
   await deps.dataRepo.deleteByArtefact(existing.id);
+  await deps.viewRepo.deleteByArtefact(existing.id);
   await deps.repo.delete(existing.id);
 }

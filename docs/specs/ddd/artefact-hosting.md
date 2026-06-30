@@ -62,8 +62,8 @@ Aggregate root. The consistency boundary for one hosted artefact.
 10. **Ingestion parity**: artefacts created by **API push** satisfy the exact same
     invariants as **manual upload**; there is no privileged path that bypasses them.
 11. **Delete is archived-only**: an artefact may be permanently deleted only while
-    `archived`, only by its owner; deletion also removes its payload file and all its data
-    entries.
+    `archived`, only by its owner; deletion also removes its payload file, all its data
+    entries, and all its view entries (Artefact Views, `artefact-views.md` VT5).
 12. **Selected ⟹ slug**: `selected` is a shared tier — it mints a slug on the first share
     and retains it exactly like `authenticated`/`public` (subsumed by AH4/AH5). The slug
     link is live only for the owner and members; a signed-in non-member gets a flat 404, and
@@ -120,9 +120,10 @@ States are the product of `visibility × status`. Allowed transitions:
 
 > **Permanent delete** removes an artefact for good and is allowed **only from `archived`**
 > (an active artefact must be archived first). Deletion removes the aggregate row, its
-> **payload file**, and **all its data entries** (the data context is owned by the artefact —
-> see Relationship to Artefact Data). It is irreversible; the UI gates it behind an explicit
-> confirmation. Soft-delete (archive) remains the default lifecycle.
+> **payload file**, **all its data entries** (the data context is owned by the artefact — see
+> Relationship to Artefact Data), and **all its view entries** (Artefact Views, see
+> `artefact-views.md`). It is irreversible; the UI gates it behind an explicit confirmation.
+> Soft-delete (archive) remains the default lifecycle.
 
 ## Serving model
 

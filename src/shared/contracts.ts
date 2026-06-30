@@ -122,3 +122,18 @@ export interface DataAuthorSummary {
 export interface DataAuthorsResponse {
   authors: DataAuthorSummary[];
 }
+
+// S21 — Artefact Views ("who has viewed"). One viewer who has opened an artefact,
+// enriched (BFF-side) with their display identity so the host "viewed by" widget
+// can label them. Drives `GET /api/artefacts/:ref/viewers`. `viewedAt` is the
+// most recent open (latest view only, VT1). The list excludes the caller (VT4).
+export interface ArtefactViewerSummary {
+  viewerId: string;
+  name: string;
+  email: string;
+  viewedAt: string;
+}
+
+export interface ArtefactViewersResponse {
+  viewers: ArtefactViewerSummary[];
+}

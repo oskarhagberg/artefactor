@@ -7,6 +7,7 @@ import {
 import { createArtefact, shareArtefact } from "../../domain/artefact/artefact";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
+import { InMemoryViewRepository } from "../../domain/views/in-memory-view-repository";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
 import { ArtefactNotFound, InvariantViolation } from "../../domain/artefact/errors";
 
@@ -90,10 +91,12 @@ class FakePayloadStore implements PayloadStore {
 describe("delete command (S15, AH11)", () => {
   let repo: InMemoryArtefactRepository;
   let dataRepo: InMemoryDataRepository;
+  let viewRepo: InMemoryViewRepository;
   let payloadStore: FakePayloadStore;
   beforeEach(() => {
     repo = new InMemoryArtefactRepository();
     dataRepo = new InMemoryDataRepository();
+    viewRepo = new InMemoryViewRepository();
     payloadStore = new FakePayloadStore();
   });
 
@@ -108,18 +111,23 @@ describe("delete command (S15, AH11)", () => {
       id: "d2", artefactId: "a1", authorId: "viewer-2", blob: "[2]",
       createdAt: now, updatedAt: now,
     });
+    // A view entry too — permanent delete must remove these as well (VT5).
+    await viewRepo.save({
+      id: "v1", artefactId: "a1", viewerId: "viewer-2", viewedAt: now,
+    });
   }
 
-  it("deletes an archived artefact, its payload, and all its data entries", async () => {
+  it("deletes an archived artefact, its payload, and all its data + view entries", async () => {
     await seedArchivedWithData();
     await deleteArtefactCommand(
       { artefactId: "a1", requesterId: OWNER },
-      { repo, dataRepo, payloadStore },
+      { repo, dataRepo, viewRepo, payloadStore },
     );
     expect(await repo.findById("a1")).toBeNull();
     expect(payloadStore.deleted).toEqual(["r"]);
     expect(await dataRepo.findByArtefactAndAuthor("a1", OWNER)).toBeNull();
     expect(await dataRepo.findByArtefactAndAuthor("a1", "viewer-2")).toBeNull();
+    expect(await viewRepo.listViewersByArtefact("a1")).toEqual([]);
   });
 
   it("refuses to delete an active artefact (AH11)", async () => {
@@ -127,7 +135,7 @@ describe("delete command (S15, AH11)", () => {
     await expect(
       deleteArtefactCommand(
         { artefactId: "a1", requesterId: OWNER },
-        { repo, dataRepo, payloadStore },
+        { repo, dataRepo, viewRepo, payloadStore },
       ),
     ).rejects.toBeInstanceOf(InvariantViolation);
     expect(await repo.findById("a1")).not.toBeNull();
@@ -139,7 +147,7 @@ describe("delete command (S15, AH11)", () => {
     await expect(
       deleteArtefactCommand(
         { artefactId: "a1", requesterId: "intruder" },
-        { repo, dataRepo, payloadStore },
+        { repo, dataRepo, viewRepo, payloadStore },
       ),
     ).rejects.toBeInstanceOf(ArtefactNotFound);
     expect(await repo.findById("a1")).not.toBeNull();

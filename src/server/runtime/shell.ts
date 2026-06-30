@@ -30,6 +30,9 @@ export interface HostShellContext {
   framePath: string;
   // The `…/data/authors` endpoint that populates the picker.
   authorsEndpoint: string;
+  // S21 — the `…/viewers` endpoint that populates the "viewed by" widget. The
+  // list it returns already excludes the current viewer (VT4).
+  viewersEndpoint: string;
   // The signed-in viewer, or null. Used to label "your data", to know which
   // listed author is the viewer, and to show the back-to-admin button.
   viewerId: string | null;
@@ -48,6 +51,7 @@ export function renderHostShell(ctx: HostShellContext): string {
     ownerId: ctx.ownerId,
     frameSrc: ctx.framePath,
     authorsEndpoint: ctx.authorsEndpoint,
+    viewersEndpoint: ctx.viewersEndpoint,
     usesStorage: ctx.usesStorage,
   };
   // Escape `<` so a title containing "</script>" cannot break out of the tag.
@@ -68,6 +72,31 @@ export function renderHostShell(ctx: HostShellContext): string {
     ? `<a class="ae-back" href="/" title="Back to your artefacts" aria-label="Back to your artefacts">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
       </a>`
+    : "";
+
+  // Host tools: the data-context switcher and (later) more widgets beside it.
+  // Rendered only for signed-in viewers; anonymous public viewers never see any
+  // of them. Add future widgets as siblings of `.ae-switch` inside `.ae-tools`.
+  const hostTools = ctx.viewerId
+    ? `<div class="ae-tools" id="ae-tools">
+      <div class="ae-switch" id="ae-switch">
+        <label for="ae-ctx">Data context</label>
+        <select id="ae-ctx" aria-label="Data context"></select>
+        <span class="ae-ro" id="ae-ro">read-only</span>
+      </div>
+      <div class="ae-viewers" id="ae-viewers">
+        <button type="button" class="ae-viewers-btn" id="ae-viewers-btn" aria-haspopup="dialog" aria-expanded="false" title="Who has viewed this">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span class="ae-viewers-count" id="ae-viewers-count" hidden></span>
+          <span class="ae-viewers-label">Viewed by</span>
+        </button>
+        <div class="ae-viewers-pop" id="ae-viewers-pop" role="dialog" aria-label="Who has viewed this" hidden>
+          <div class="ae-viewers-head">Viewed by</div>
+          <ul class="ae-viewers-list" id="ae-viewers-list"></ul>
+          <div class="ae-viewers-empty" id="ae-viewers-empty" hidden>No one else has viewed this yet.</div>
+        </div>
+      </div>
+    </div>`
     : "";
 
   return `<!doctype html>
@@ -103,6 +132,24 @@ export function renderHostShell(ctx: HostShellContext): string {
      to (S20); a non-persisting artefact never reveals it. */
   .ae-switch { display: none; align-items: center; gap: .6rem; }
   .ae-switch.show { display: flex; }
+  /* Signed-in-only host tools: the data-context switcher plus (later) more
+     widgets beside it. The whole group is omitted for anonymous viewers, so a
+     public link stays chrome-light. */
+  .ae-tools { display: flex; align-items: center; gap: .6rem; }
+  /* S21 "viewed by" widget — a button beside the data-context switcher that
+     opens a pop-over listing who else has viewed the artefact. */
+  .ae-viewers { position: relative; }
+  .ae-viewers-btn { display: inline-flex; align-items: center; gap: .4rem; font: inherit; font-size: 13px; height: 32px; padding: 0 .6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg); cursor: pointer; box-shadow: var(--shadow); }
+  .ae-viewers-btn:hover { background: var(--muted); }
+  .ae-viewers-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--fg); color: #fff; font-size: 11px; font-weight: 600; line-height: 1; }
+  .ae-viewers-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; width: 280px; max-width: 80vw; max-height: 60vh; overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(16,17,18,0.12); padding: .5rem; }
+  .ae-viewers-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-fg); padding: .25rem .4rem .4rem; }
+  .ae-viewers-list { list-style: none; margin: 0; padding: 0; }
+  .ae-viewers-list li { display: flex; flex-direction: column; gap: .1rem; padding: .4rem; border-radius: 7px; }
+  .ae-viewers-list li:hover { background: var(--muted); }
+  .ae-viewers-name { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ae-viewers-meta { font-size: 12px; color: var(--muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ae-viewers-empty { padding: .5rem .4rem; font-size: 13px; color: var(--muted-fg); }
   .ae-frame { flex: 1 1 auto; width: 100%; border: 0; }
 </style>
 </head>
@@ -118,19 +165,20 @@ export function renderHostShell(ctx: HostShellContext): string {
         <div class="ae-sub">${escapeHtml(subLabel)}</div>
       </div>
     </div>
-    <div class="ae-switch" id="ae-switch">
-      <label for="ae-ctx">Data context</label>
-      <select id="ae-ctx" aria-label="Data context"></select>
-      <span class="ae-ro" id="ae-ro">read-only</span>
-    </div>
+    ${hostTools}
   </div>
   <iframe class="ae-frame" id="ae-frame" title="Artefact"></iframe>
 <script>
 (function(){
   var cfg = ${cfgJson};
+  var frame = document.getElementById("ae-frame");
+
+  // Anonymous viewers get no host tools (data-context switcher / future
+  // widgets) — just load the artefact in its default read-only context.
+  if (!cfg.viewerId) { frame.src = cfg.frameSrc; return; }
+
   var sel = document.getElementById("ae-ctx");
   var ro = document.getElementById("ae-ro");
-  var frame = document.getElementById("ae-frame");
   var switcher = document.getElementById("ae-switch");
 
   function seed(authorId){
@@ -161,7 +209,7 @@ export function renderHostShell(ctx: HostShellContext): string {
   // Default context = the viewer's own data (read-write when signed in).
   var def = document.createElement("option");
   def.value = "";
-  def.textContent = cfg.viewerId ? "Your data" : "Default";
+  def.textContent = "Your data";
   sel.appendChild(def);
 
   // Always seed the default context first so the artefact loads immediately,
@@ -191,6 +239,66 @@ export function renderHostShell(ctx: HostShellContext): string {
   }
 
   sel.addEventListener("change", function(){ seed(sel.value); });
+
+  // S21 — "viewed by" widget. Fetch the other viewers (the endpoint already
+  // excludes the current viewer, VT4), show a count, and reveal a pop-over list
+  // on click. Best-effort: any failure just leaves the widget showing nothing.
+  var vBtn = document.getElementById("ae-viewers-btn");
+  var vPop = document.getElementById("ae-viewers-pop");
+  var vList = document.getElementById("ae-viewers-list");
+  var vEmpty = document.getElementById("ae-viewers-empty");
+  var vCount = document.getElementById("ae-viewers-count");
+
+  function viewerName(v){
+    return v.name || v.email || ("User " + v.viewerId.slice(0, 6));
+  }
+
+  function renderViewers(viewers){
+    vList.textContent = "";
+    if (!viewers.length) { vEmpty.hidden = false; return; }
+    vEmpty.hidden = true;
+    vCount.textContent = String(viewers.length);
+    vCount.hidden = false;
+    viewers.forEach(function(v){
+      var li = document.createElement("li");
+      var name = document.createElement("div");
+      name.className = "ae-viewers-name";
+      name.textContent = viewerName(v);
+      var meta = document.createElement("div");
+      meta.className = "ae-viewers-meta";
+      // Email (when we also have a name) plus when they last viewed.
+      var bits = [];
+      if (v.email && v.name) bits.push(v.email);
+      bits.push("viewed " + rel(v.viewedAt));
+      meta.textContent = bits.join(" \\u00b7 ");
+      li.appendChild(name);
+      li.appendChild(meta);
+      vList.appendChild(li);
+    });
+  }
+
+  fetch(cfg.viewersEndpoint, { credentials: "same-origin" })
+    .then(function(r){ return r.ok ? r.json() : { viewers: [] }; })
+    .then(function(data){ renderViewers(data.viewers || []); })
+    .catch(function(){ renderViewers([]); });
+
+  function setOpen(open){
+    vPop.hidden = !open;
+    vBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  vBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    setOpen(vPop.hidden);
+  });
+  // Dismiss on an outside click or Escape.
+  document.addEventListener("click", function(e){
+    if (!vPop.hidden && !vPop.contains(e.target) && e.target !== vBtn && !vBtn.contains(e.target)) {
+      setOpen(false);
+    }
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape") setOpen(false);
+  });
 })();
 </script>
 </body>

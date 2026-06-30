@@ -2,7 +2,12 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { env } from "./env";
-import { artefactRepository, dataRepository, payloadStore } from "./adapters";
+import {
+  artefactRepository,
+  dataRepository,
+  payloadStore,
+  viewRepository,
+} from "./adapters";
 import { createApiRoutes } from "./routes";
 import { createArtefactServingRoutes } from "./routes/serve";
 import { createMcpRoutes } from "./mcp/routes";
@@ -31,6 +36,7 @@ export function createApp() {
       repo: artefactRepository,
       payloadStore,
       dataRepo: dataRepository,
+      viewRepo: viewRepository,
     }),
   );
 

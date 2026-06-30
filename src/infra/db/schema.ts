@@ -275,5 +275,27 @@ export const dataEntry = sqliteTable(
   ],
 );
 
+// Artefact Views context (S21). One row per (artefact, viewer) recording the
+// most recent time a signed-in viewer opened the artefact — latest view only,
+// upsert (VT1). Removed with the artefact via ON DELETE CASCADE; the viewer FK
+// keeps it referentially sound. Indexed on artefact_id for the "viewed by" list.
+export const viewEntry = sqliteTable(
+  "view_entry",
+  {
+    id: text("id").primaryKey(),
+    artefactId: text("artefact_id")
+      .notNull()
+      .references(() => artefact.id, { onDelete: "cascade" }),
+    viewerId: text("viewer_id")
+      .notNull()
+      .references(() => user.id),
+    viewedAt: integer("viewed_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("view_entry_artefact_viewer_uq").on(t.artefactId, t.viewerId),
+    index("view_entry_artefact_idx").on(t.artefactId),
+  ],
+);
+
 // NOTE: owner_id / author_id are foreign keys to the BetterAuth `user` table
 // above — the authenticated user id is the domain's stable `ownerId`/`authorId`.

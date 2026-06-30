@@ -135,13 +135,17 @@ This keeps cross-user viewing entirely in the host application (BFF + chrome), b
 by the `…/data/authors` and `…/data/:authorId` endpoints above.
 
 **Realized in S12 as a server-rendered shell.** `/a/:slug` returns a thin host shell (a
-toolbar with the author picker) that wraps an `<iframe>` loading the artefact from
-`/a/:slug/frame` (`?author=<id>` chooses the context). The shell is server-rendered rather
-than part of the Svelte SPA because `/a/:slug` is the shareable link and must also serve
-unauthenticated/public viewers, who never load the SPA. The picker is access-matrix gated
-(AD4) — including anonymous reads of a `public` artefact — so the `…/authors` and
-`…/:authorId` endpoints are **not** `requireAuth`-gated. Only the viewer's *own* context is
-seeded writable; any other author is read-only (AD5).
+toolbar that wraps an `<iframe>` loading the artefact from `/a/:slug/frame`; `?author=<id>`
+chooses the context). The shell is server-rendered rather than part of the Svelte SPA because
+`/a/:slug` is the shareable link and must also serve unauthenticated/public viewers, who never
+load the SPA. The **host tools** — the data-context picker, and any future toolbar widgets —
+live in a **signed-in-only** wrapper: an anonymous public viewer gets the title bar + artefact
+only, never the switcher. (This is a host-UI choice, not an access rule: the `…/authors` /
+`…/:authorId` endpoints stay **not** `requireAuth`-gated, so AD4 — anonymous *may* read a
+`public` artefact's data — still holds at the API; the switcher just isn't surfaced to them.)
+For a signed-in viewer the picker itself still only appears when there's another context to
+switch to (S20). Only the viewer's *own* context is seeded writable; any other author is
+read-only (AD5).
 
 ## Decided
 

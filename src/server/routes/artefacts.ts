@@ -28,6 +28,7 @@ import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { renderServedArtefact } from "../runtime/render";
 import { renderHostShell } from "../runtime/shell";
 import type { DataRepository } from "../../domain/data/data-repository";
+import type { ViewRepository } from "../../domain/views/view-repository";
 import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
@@ -43,6 +44,7 @@ import type {
 // directory used to enrich + validate the S16 access list.
 export type ArtefactRoutesDeps = CreateArtefactDeps & {
   dataRepo: DataRepository;
+  viewRepo: ViewRepository;
   userDirectory: UserDirectory;
 };
 
@@ -103,6 +105,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
           updatedAt: artefact.updatedAt.toISOString(),
           framePath: `/api/artefacts/${encodeURIComponent(artefact.id)}/raw/frame`,
           authorsEndpoint: `/api/artefacts/${encodeURIComponent(artefact.id)}/data/authors`,
+          viewersEndpoint: `/api/artefacts/${encodeURIComponent(artefact.id)}/viewers`,
           viewerId: ownerId(c),
           ownerId: artefact.ownerId,
           usesStorage: artefact.usesStorage,
@@ -303,6 +306,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
         {
           repo: deps.repo,
           dataRepo: deps.dataRepo,
+          viewRepo: deps.viewRepo,
           payloadStore: deps.payloadStore,
         },
       );
