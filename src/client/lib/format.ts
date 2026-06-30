@@ -16,6 +16,16 @@ export const KINDS = KIND_PRESENTATION;
 export { KIND_ORDER };
 export const kindMeta = kindPresentation;
 
+// Indicator for an artefact that persists data (AH16 `usesStorage`). A small
+// database glyph, shown in the dashboard/gallery card (upper-right) and row
+// (after the kind label). Drawn as `<path>`s for Icon.svelte (24×24 box).
+export const STORAGE_ICON: readonly string[] = [
+  "M3 5a9 3 0 1 0 18 0a9 3 0 1 0-18 0", // top ellipse
+  "M3 5V19a9 3 0 0 0 18 0V5", // sides + bottom
+  "M3 12a9 3 0 0 0 18 0", // middle band
+];
+export const STORAGE_LABEL = "Saves data";
+
 /** Per-visibility presentation metadata. */
 export interface VisMeta {
   label: string;

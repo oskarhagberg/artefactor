@@ -518,6 +518,9 @@ Stop showing the "Data context" picker (S12 chrome) on artefacts that can't usef
   `…/data/authors` fetch yields ≥1 author other than the viewer; otherwise the picker is omitted
   (and when `usesStorage` is false the shell skips the fetch). The artefact + its data API are
   unchanged — this is chrome only.
+- **Client (SPA)** — `usesStorage` rides `ArtefactSummary`, surfaced as a small "saves data"
+  indicator (a database glyph) in the dashboard **and** gallery views: upper-right of the grid
+  card, and after the kind label on the list row's second line.
 - **Acceptance:** an artefact whose HTML uses `localStorage` → `usesStorage = true`; one using
   only `sessionStorage` or no storage → `false`; a title-only edit doesn't flip it; a
   payload-replacing edit recomputes it; the served shell omits the picker when `usesStorage` is

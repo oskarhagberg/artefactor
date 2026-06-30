@@ -39,6 +39,9 @@ export interface ArtefactSummary {
   status: "active" | "archived";
   publicSlug: string | null;
   payloadBytes: number;
+  // AH16: whether the artefact persists data (uses localStorage). The client
+  // shows a small indicator for it in the dashboard/gallery card + row.
+  usesStorage: boolean;
   createdAt: string;
   updatedAt: string;
 }

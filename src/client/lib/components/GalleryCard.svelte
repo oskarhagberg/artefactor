@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SharedArtefactSummary } from "../../../shared/contracts";
-  import { kindMeta, initials, relativeTime } from "../format";
+  import { kindMeta, initials, relativeTime, STORAGE_ICON, STORAGE_LABEL } from "../format";
   import Icon from "./Icon.svelte";
 
   interface Props {
@@ -33,6 +33,15 @@
         {m.label}
       </span>
     </span>
+    {#if g.usesStorage}
+      <span
+        title={STORAGE_LABEL}
+        aria-label={STORAGE_LABEL}
+        style="position:absolute;top:9px;right:9px;display:inline-flex;align-items:center;justify-content:center;padding:4px;border-radius:7px;background:var(--card);color:var(--muted-fg);box-shadow:var(--shadow);"
+      >
+        <Icon paths={STORAGE_ICON} size={13} width={1.8} />
+      </span>
+    {/if}
   </button>
   <div style="padding:13px 14px 13px;display:flex;flex-direction:column;gap:11px;">
     <div

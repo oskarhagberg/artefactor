@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ArtefactSummary } from "../../../shared/contracts";
-  import { kindMeta, fmtBytes, relativeTime, type Visibility } from "../format";
+  import { kindMeta, fmtBytes, relativeTime, STORAGE_ICON, STORAGE_LABEL, type Visibility } from "../format";
   import { overlay } from "../ui.svelte";
   import Icon from "./Icon.svelte";
   import MoreMenu from "./MoreMenu.svelte";
@@ -48,7 +48,13 @@
     <div
       style="display:flex;align-items:center;gap:7px;margin-top:3px;font-size:11.5px;color:var(--muted-fg);flex-wrap:wrap;"
     >
-      <span>{m.label}</span><span style="opacity:.5;">·</span>
+      <span>{m.label}</span>
+      {#if a.usesStorage}
+        <span title={STORAGE_LABEL} aria-label={STORAGE_LABEL} style="display:inline-flex;align-items:center;color:var(--muted-fg);">
+          <Icon paths={STORAGE_ICON} size={12} width={1.8} />
+        </span>
+      {/if}
+      <span style="opacity:.5;">·</span>
       <span>Updated {relativeTime(a.updatedAt)}</span><span style="opacity:.5;">·</span>
       <span style="font-family:'Geist Mono',monospace;">{fmtBytes(a.payloadBytes)}</span>
       {#if isShared}

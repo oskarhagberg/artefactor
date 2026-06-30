@@ -358,6 +358,7 @@ export function toArtefactSummary(a: Artefact): ArtefactSummary {
     status: a.status,
     publicSlug: a.publicSlug,
     payloadBytes: a.payloadBytes,
+    usesStorage: a.usesStorage,
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
   };
