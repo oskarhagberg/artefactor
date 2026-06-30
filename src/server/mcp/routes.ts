@@ -4,8 +4,8 @@ import {
   oAuthDiscoveryMetadata,
   oAuthProtectedResourceMetadata,
 } from "better-auth/plugins";
-import { auth } from "../auth";
 import { env } from "../env";
+import type { AuthInstance } from "../middleware/auth";
 import { buildMcpServer, type McpToolDeps } from "./server";
 
 // S18 — MCP connector endpoints, mounted at the app root (NOT under /api) so
@@ -14,7 +14,7 @@ import { buildMcpServer, type McpToolDeps } from "./server";
 // (authorize/consent/token/register) is served by the BetterAuth handler under
 // `/api/auth/*` via the `mcp` plugin; these root routes are the discovery
 // surface plus the bearer-guarded tool endpoint.
-export function createMcpRoutes(deps: McpToolDeps) {
+export function createMcpRoutes(deps: McpToolDeps, auth: AuthInstance) {
   const r = new Hono();
 
   // Discovery — better-auth renders the metadata; we just expose it at the root

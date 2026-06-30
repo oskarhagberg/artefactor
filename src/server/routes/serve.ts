@@ -7,13 +7,18 @@ import type { ViewRepository } from "../../domain/views/view-repository";
 import { recordArtefactView } from "../views/views.command";
 import { renderServedArtefact } from "../runtime/render";
 import { renderHostShell } from "../runtime/shell";
-import { attachSession, type AuthEnv } from "../middleware/auth";
+import {
+  createAttachSession,
+  type AuthEnv,
+  type AuthInstance,
+} from "../middleware/auth";
 
 export interface ServingDeps {
   repo: ArtefactRepository;
   payloadStore: PayloadStore;
   dataRepo: DataRepository;
   viewRepo: ViewRepository;
+  auth: AuthInstance;
 }
 
 // S6 + S12 — Serve artefact by slug. The shared links point at `/a/:slug`, which
@@ -28,7 +33,7 @@ export function createArtefactServingRoutes(deps: ServingDeps) {
   const app = new Hono<AuthEnv>();
 
   // Resolve the viewer's session so the access matrix can see who is asking.
-  app.use("*", attachSession);
+  app.use("*", createAttachSession(deps.auth));
 
   // The host shell with the data-context switcher (outside the artefact).
   app.get("/:slug", async (c) => {

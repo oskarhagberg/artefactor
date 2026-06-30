@@ -1,6 +1,11 @@
 import { createMiddleware } from "hono/factory";
 import { auth } from "../auth";
 
+// S24 (auth seam) — the BetterAuth instance type. The composition injects the
+// instance (OSS default = the SQLite-backed `auth` singleton; a superset passes a
+// Postgres-backed one), so no module hardcodes which database auth lives in.
+export type AuthInstance = typeof auth;
+
 // The authenticated identity, as surfaced by BetterAuth's session lookup. The
 // domain only cares about `user.id` — that is the stable `ownerId` (IA spec).
 export type AuthUser = typeof auth.$Infer.Session.user;
@@ -16,13 +21,19 @@ export type AuthEnv = {
 };
 
 // Resolve the BetterAuth session for the request and expose it to downstream
-// handlers. Runs on every BFF route except the BetterAuth handler itself.
-export const attachSession = createMiddleware<AuthEnv>(async (c, next) => {
-  const data = await auth.api.getSession({ headers: c.req.raw.headers });
-  c.set("user", data?.user ?? null);
-  c.set("session", data?.session ?? null);
-  await next();
-});
+// handlers. Runs on every BFF route except the BetterAuth handler itself. A
+// factory over the injected auth instance (S24 auth seam) so the same middleware
+// works against whichever database auth is backed by.
+export function createAttachSession(authInstance: AuthInstance) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const data = await authInstance.api.getSession({
+      headers: c.req.raw.headers,
+    });
+    c.set("user", data?.user ?? null);
+    c.set("session", data?.session ?? null);
+    await next();
+  });
+}
 
 // Guard for protected endpoints: rejects unauthenticated requests with 401.
 // Encodes IA invariant 1 — non-public access requires an authenticated session.

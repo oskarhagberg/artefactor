@@ -1,9 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { auth } from "../auth";
 import { env } from "../env";
 import type { Adapters } from "../adapters";
-import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
+import {
+  createAttachSession,
+  requireAuth,
+  type AuthEnv,
+  type AuthInstance,
+} from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
 import { createViewRoutes } from "./views";
@@ -17,7 +21,7 @@ import type {
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
 // S24 — the persistence-port adapters are injected (see `createApp`), not
 // imported as ambient singletons, so a superset can wire a different backend.
-export function createApiRoutes(adapters: Adapters) {
+export function createApiRoutes(adapters: Adapters, auth: AuthInstance) {
   const {
     artefactRepository,
     dataRepository,
@@ -45,7 +49,7 @@ export function createApiRoutes(adapters: Adapters) {
   api.on(["POST", "GET"], "/auth/*", (c) => auth.handler(c.req.raw));
 
   // Every other BFF request gets its BetterAuth session resolved up front.
-  api.use("*", attachSession);
+  api.use("*", createAttachSession(auth));
 
   api.get("/ping", (c) => c.json({ pong: true }));
 

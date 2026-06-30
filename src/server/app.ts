@@ -3,15 +3,21 @@ import { logger } from "hono/logger";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { env } from "./env";
 import { defaultAdapters, type Adapters } from "./adapters";
+import { auth as defaultAuth } from "./auth";
+import type { AuthInstance } from "./middleware/auth";
 import { createApiRoutes } from "./routes";
 import { createArtefactServingRoutes } from "./routes/serve";
 import { createMcpRoutes } from "./mcp/routes";
 import type { HealthResponse } from "../shared/contracts";
 
-// S24 — the composition root. The persistence-port adapters are injected
-// (defaulting to the OSS SQLite/filesystem set), so a superset can compose the
-// same app over a different backend without editing core.
-export function createApp(adapters: Adapters = defaultAdapters) {
+// S24 — the composition root. The persistence-port adapters *and* the BetterAuth
+// instance are injected (defaulting to the OSS SQLite/filesystem set + the
+// SQLite-backed `auth`), so a superset can compose the same app over a different
+// backend (e.g. Postgres) without editing core.
+export function createApp(
+  adapters: Adapters = defaultAdapters,
+  auth: AuthInstance = defaultAuth,
+) {
   const app = new Hono();
 
   app.use("*", logger());
@@ -24,7 +30,7 @@ export function createApp(adapters: Adapters = defaultAdapters) {
     }),
   );
 
-  app.route("/api", createApiRoutes(adapters));
+  app.route("/api", createApiRoutes(adapters, auth));
 
   // S6 — public artefact serving by slug (the shared-link render route). Mounted
   // before the static handlers so `/a/:slug` is not swallowed by the SPA fallback.
@@ -35,6 +41,7 @@ export function createApp(adapters: Adapters = defaultAdapters) {
       payloadStore: adapters.payloadStore,
       dataRepo: adapters.dataRepository,
       viewRepo: adapters.viewRepository,
+      auth,
     }),
   );
 
@@ -44,11 +51,14 @@ export function createApp(adapters: Adapters = defaultAdapters) {
   // /api/auth/* (the BetterAuth `mcp` plugin).
   app.route(
     "/",
-    createMcpRoutes({
-      repo: adapters.artefactRepository,
-      payloadStore: adapters.payloadStore,
-      dataRepo: adapters.dataRepository,
-    }),
+    createMcpRoutes(
+      {
+        repo: adapters.artefactRepository,
+        payloadStore: adapters.payloadStore,
+        dataRepo: adapters.dataRepository,
+      },
+      auth,
+    ),
   );
 
   // Serve the built Svelte client. Static assets first...

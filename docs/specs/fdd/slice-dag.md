@@ -610,10 +610,15 @@ superset can wire a different backend (Postgres) without forking the composition
   payloadStore, userDirectory }`) as a parameter; `createApp()` threads it. `adapters.ts` remains
   the **OSS default set** (SQLite + filesystem), passed by the OSS entry. (The serve + MCP route
   factories already take injected deps.)
+- **The BetterAuth instance is injected the same way** — `createApp(adapters, auth)` (OSS default =
+  the SQLite-backed `auth`); `attachSession` becomes a factory `createAttachSession(auth)`. This is
+  required because `artefact.ownerId` and the data/view rows FK to BetterAuth's `user` table and the
+  `UserDirectory` reads it, so a superset's Postgres app must back **auth and the domain by the same
+  database** — a SQLite/Postgres split would FK-fail. Behaviour-identical for OSS.
 - **Acceptance:** every existing route/serving/MCP test passes unchanged under the default
-  (SQLite) wiring; a test injecting in-memory/fake adapters into `createApp` exercises the full
-  `/api` surface **without** touching `adapters.ts`/`client.ts`; no route module imports the
-  adapter singleton directly anymore.
+  (SQLite) wiring + default `auth`; a test injecting in-memory/fake adapters into `createApp`
+  exercises the full `/a` serve surface **without** touching `adapters.ts`/`client.ts`; no route
+  module imports the adapter or auth singleton directly anymore.
 - **Boundary:** **OSS** (the composition lives in core). The Postgres adapter set, pg schema, RLS,
   and the EE entry that injects them are the EE **Postgres persistence** context. Behaviour-
   preserving; also a testability win for OSS.
