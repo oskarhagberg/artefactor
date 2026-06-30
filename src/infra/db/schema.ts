@@ -7,6 +7,7 @@ import {
   uniqueIndex,
   primaryKey,
 } from "drizzle-orm/sqlite-core";
+import { DEFAULT_TENANT } from "../../domain/artefact/artefact";
 
 // ── Identity & Access (S1) ──────────────────────────────────────────────────
 // These tables are owned by BetterAuth (https://www.better-auth.com). The
@@ -202,7 +203,7 @@ export const artefact = sqliteTable(
       .references(() => user.id),
     // S22/AH17 — owning tenant. OSS is single-tenant: every row is DEFAULT_TENANT
     // and it never discriminates. A superset stamps the creator's org + scopes by it.
-    tenantId: text("tenant_id").notNull().default("default"),
+    tenantId: text("tenant_id").notNull().default(DEFAULT_TENANT),
     title: text("title").notNull(),
     kind: text("kind", {
       enum: ["prototype", "slide-deck", "form", "interactive-doc", "other"],
